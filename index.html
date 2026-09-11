@@ -113,12 +113,12 @@
           <label>Required Verification Photos</label>
           <div class="upload-grid">
              <div class="upload-box" onclick="document.getElementById('fileSup').click()">
-               <input type="file" id="fileSup" class="hidden" accept="image/*" capture="camera" onchange="handleFile(this, 'supPrev', 'supData')">
+               <input type="file" id="fileSup" class="hidden" accept="image/*" capture="environment" onchange="handleFile(this, 'supPrev', 'supData', 'supLabel')">
                <span id="supLabel" style="font-size:10px; font-weight:700;">SUPERVISOR</span>
                <img id="supPrev" class="hidden"><input type="hidden" id="supData">
              </div>
              <div class="upload-box" onclick="document.getElementById('fileStaff').click()">
-               <input type="file" id="fileStaff" class="hidden" accept="image/*" capture="camera" onchange="handleStaffFiles(this)">
+               <input type="file" id="fileStaff" class="hidden" accept="image/*" capture="environment" onchange="handleStaffFiles(this)">
                <span id="staffLabel" style="font-size:10px; font-weight:700;">GROUP PHOTO</span>
                <img id="staffPrev" class="hidden"><input type="hidden" id="staffData">
              </div>
@@ -178,6 +178,21 @@
             <label>End Shift Time</label>
             <input type="time" id="shiftEndTime">
           </div>
+
+          <label>Required Verification Photos</label>
+          <div class="upload-grid">
+             <div class="upload-box" onclick="document.getElementById('fileEndSup').click()">
+               <input type="file" id="fileEndSup" class="hidden" accept="image/*" capture="environment" onchange="handleFile(this, 'endSupPrev', 'endSupData', 'endSupLabel')">
+               <span id="endSupLabel" style="font-size:10px; font-weight:700;">SUPERVISOR</span>
+               <img id="endSupPrev" class="hidden"><input type="hidden" id="endSupData">
+             </div>
+             <div class="upload-box" onclick="document.getElementById('fileEndStaff').click()">
+               <input type="file" id="fileEndStaff" class="hidden" accept="image/*" capture="environment" onchange="handleEndStaffFiles(this)">
+               <span id="endStaffLabel" style="font-size:10px; font-weight:700;">GROUP PHOTO</span>
+               <img id="endStaffPrev" class="hidden"><input type="hidden" id="endStaffData">
+             </div>
+          </div>
+
           <button class="btn-main" id="endShiftSubmitBtn" onclick="submitEndShift()">Submit End Shift</button>
         </div>
  
@@ -193,7 +208,7 @@
       // =====================================================================
       const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzf_erZFTST-MS2LzWtT2Fy3odL5Pbvud8-jfaaWfKj52w5z-qyWRMt9OuzPMpXUjpfIg/exec";
  
-      let userSession = {}; let employees = []; let registerState = {}; let hasGroupPhoto = false; let sessionFirstRow = null;
+      let userSession = {}; let employees = []; let registerState = {}; let hasGroupPhoto = false; let hasEndGroupPhoto = false; let sessionFirstRow = null;
       let replacementPool = { regions: [], allStaff: [] }; let lateRecordsLog = []; let earlyRecordsLog = [];
       let currentLocation = "Location: Fetching...";
       let registerSubmitLock = false; // prevents double-clicks/duplicate taps from firing two separate submissions
@@ -235,7 +250,7 @@
 
       function logout() {
         localStorage.removeItem('lastActiveUser'); // keeps cachedApp_<user> intact so this user can still log in offline next time
-        userSession = {}; employees = []; registerState = {}; hasGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = []; earlyRecordsLog = [];
+        userSession = {}; employees = []; registerState = {}; hasGroupPhoto = false; hasEndGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = []; earlyRecordsLog = [];
         registerSubmitLock = false; lateSubmitLock = false; earlySubmitLock = false; endShiftSubmitLock = false;
         document.getElementById('appView').classList.add('hidden');
         document.getElementById('loginView').classList.remove('hidden');
@@ -245,6 +260,9 @@
         document.getElementById('supPrev').classList.add('hidden'); document.getElementById('supData').value = "";
         document.getElementById('staffPrev').classList.add('hidden'); document.getElementById('staffData').value = "";
         document.getElementById('supLabel').classList.remove('hidden'); document.getElementById('staffLabel').classList.remove('hidden');
+        document.getElementById('endSupPrev').classList.add('hidden'); document.getElementById('endSupData').value = "";
+        document.getElementById('endStaffPrev').classList.add('hidden'); document.getElementById('endStaffData').value = "";
+        document.getElementById('endSupLabel').classList.remove('hidden'); document.getElementById('endStaffLabel').classList.remove('hidden');
         document.getElementById('lateLogContainer').classList.add('hidden');
         document.getElementById('earlyLogContainer').classList.add('hidden');
         document.getElementById('shiftStartTime').value = ""; document.getElementById('shiftEndTime').value = ""; document.getElementById('shift').value = ""; document.getElementById('shiftType').value = "Day";
@@ -507,7 +525,7 @@
           const cached = getOfflineCredential(u);
           if (cached && cached.pass === p.toLowerCase().trim()) {
             userSession = cached.session;
-            registerState = {}; hasGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = [];
+            registerState = {}; hasGroupPhoto = false; hasEndGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = [];
             enterApp();
             const hadStaff = restoreCachedListsForUser(u);
             if (!hadStaff) document.getElementById('staffList').innerHTML = '<div class="loading-msg">No cached staff list for this user yet — log in online once to load it.</div>';
@@ -532,7 +550,7 @@
           const cached = getOfflineCredential(u);
           if (cached && cached.pass === p.toLowerCase().trim()) {
             userSession = cached.session;
-            registerState = {}; hasGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = [];
+            registerState = {}; hasGroupPhoto = false; hasEndGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = [];
             enterApp();
             const hadStaff = restoreCachedListsForUser(u);
             if (!hadStaff) document.getElementById('staffList').innerHTML = '<div class="loading-msg">No cached staff list for this user yet — log in online once to load it.</div>';
@@ -799,12 +817,14 @@
         const date = document.getElementById('regDate').value;
         if (!date) return showAlert("Set the Date on the Attendance tab first.");
         if (!endTime) return showAlert("Enter the End Shift time.");
+        if (!document.getElementById('endSupData').value) return showAlert("Supervisor photo required.");
+        if (!hasEndGroupPhoto) return showAlert("Group photo required.");
 
         endShiftSubmitLock = true;
         const btn = document.getElementById('endShiftSubmitBtn'); btn.disabled = true; btn.innerText = "Syncing...";
 
         const submissionId = generateId(); // reused across any automatic retries of THIS click only
-        const payload = { submissionId, date: date, endTime: endTime, site: userSession.site, comp: userSession.comp, reg: userSession.reg };
+        const payload = { submissionId, date: date, endTime: endTime, site: userSession.site, comp: userSession.comp, reg: userSession.reg, endSupPhoto: document.getElementById('endSupData').value, endStaffPhoto: document.getElementById('endStaffData').value };
 
         // Queue key is per-date so resubmitting for the same day while still offline
         // overwrites the pending item instead of creating a duplicate.
@@ -830,13 +850,21 @@
       function overlayStamp(img, canvas, callback) {
         const ctx = canvas.getContext('2d'); canvas.width = 400; canvas.height = 300; ctx.drawImage(img, 0, 0, 400, 300); ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; ctx.fillRect(0, 260, 400, 40); ctx.fillStyle = "white"; ctx.font = "11px Inter, Arial"; const ts = new Date().toLocaleString(); ctx.fillText(`${currentLocation} | ${ts}`, 10, 285); callback(canvas.toDataURL('image/jpeg', 0.4));
       }
-      function handleFile(input, prevId, dataId) {
-        const file = input.files[0]; if (!file) return; const reader = new FileReader();
-        reader.onload = (e) => { const img = new Image(); img.onload = () => { overlayStamp(img, document.getElementById('canvas'), (stampedData) => { document.getElementById(prevId).src = stampedData; document.getElementById(prevId).classList.remove('hidden'); document.getElementById(dataId).value = stampedData; if(prevId === 'supPrev') document.getElementById('supLabel').classList.add('hidden'); }); }; img.src = e.target.result; }; reader.readAsDataURL(file);
+      /* Photos must be taken on the spot, not picked out of the gallery. `capture` only
+       * asks the OS for the camera — it is ignored entirely on desktop — so we also reject
+       * any file that wasn't created in the last few minutes. A file with no lastModified
+       * is allowed through rather than blocking a camera source that doesn't set it. */
+      const MAX_PHOTO_AGE_MS = 5 * 60 * 1000;
+      function isFreshCapture(file) { return !file.lastModified || (Date.now() - file.lastModified) <= MAX_PHOTO_AGE_MS; }
+
+      function handleFile(input, prevId, dataId, labelId, onStored) {
+        const file = input.files[0]; if (!file) return;
+        if (!isFreshCapture(file)) { input.value = ""; return showAlert("This photo must be taken now, with the camera. A saved or downloaded image can't be used."); }
+        const reader = new FileReader();
+        reader.onload = (e) => { const img = new Image(); img.onload = () => { overlayStamp(img, document.getElementById('canvas'), (stampedData) => { document.getElementById(prevId).src = stampedData; document.getElementById(prevId).classList.remove('hidden'); document.getElementById(dataId).value = stampedData; if (labelId) document.getElementById(labelId).classList.add('hidden'); if (onStored) onStored(); }); }; img.src = e.target.result; }; reader.readAsDataURL(file);
       }
-      function handleStaffFiles(input) {
-        if(input.files.length > 0) { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { overlayStamp(img, document.getElementById('canvas'), (stampedData) => { document.getElementById('staffPrev').src = stampedData; document.getElementById('staffPrev').classList.remove('hidden'); document.getElementById('staffData').value = stampedData; document.getElementById('staffLabel').classList.add('hidden'); hasGroupPhoto = true; }); }; img.src = e.target.result; }; reader.readAsDataURL(input.files[0]); }
-      }
+      function handleStaffFiles(input) { handleFile(input, 'staffPrev', 'staffData', 'staffLabel', () => { hasGroupPhoto = true; }); }
+      function handleEndStaffFiles(input) { handleFile(input, 'endStaffPrev', 'endStaffData', 'endStaffLabel', () => { hasEndGroupPhoto = true; }); }
  
       function submitRegister() {
         if (registerSubmitLock) return; // guard against rapid double-taps firing two separate submissions
