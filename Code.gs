@@ -8,14 +8,46 @@
  */
 
 /**
+ * Which spreadsheet this script reads and writes.
+ *
+ * Leave EMPTY for the production, container-bound project: it then uses the
+ * sheet the script is attached to, exactly as before.
+ *
+ * Set it to a spreadsheet id to run this same code as a STANDALONE project
+ * (script.google.com > New project), which is how the test environment works —
+ * a standalone script has no "active" spreadsheet, so it must be told which one
+ * to open. This is also the escape hatch when File > Make a copy doesn't bring
+ * the bound script with it, which happens when you don't own the original.
+ */
+const SPREADSHEET_ID_OVERRIDE = "";
+
+/** The spreadsheet this run operates on. See SPREADSHEET_ID_OVERRIDE above. */
+function getSS() {
+  return SPREADSHEET_ID_OVERRIDE
+    ? SpreadsheetApp.openById(SPREADSHEET_ID_OVERRIDE)
+    : SpreadsheetApp.getActiveSpreadsheet();
+}
+
+/**
  * doNOT change this function name - required for GAS Web Apps
  * Kept for reference / fallback — you can still open this URL directly in a browser.
+ *
+ * The real front end is the static site on GitHub Pages; this only exists as a
+ * legacy fallback. A standalone project has no 'Index' file to serve, so this
+ * degrades to a plain message instead of throwing.
  */
 function doGet() {
-  return HtmlService.createTemplateFromFile('Index').evaluate()
-    .setTitle('Corporate Attendance Portal')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+  try {
+    return HtmlService.createTemplateFromFile('Index').evaluate()
+      .setTitle('Corporate Attendance Portal')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+  } catch (e) {
+    return HtmlService.createHtmlOutput(
+      '<p style="font-family:Arial,sans-serif;padding:24px;">This URL is the JSON API for the Attendance Platform. ' +
+      'The app itself is served separately as a static site.</p>'
+    ).setTitle('Corporate Attendance Portal');
+  }
 }
 
 /**
@@ -103,7 +135,7 @@ function getScriptUrl() {
 
 /** Case-Insensitive Login */
 function portal_verifyUser(u, p) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS();
   const sheet = ss.getSheetByName('Users');
   const data = sheet.getDataRange().getValues();
   const inputUser = u.toString().toLowerCase().trim();
@@ -120,7 +152,7 @@ function portal_verifyUser(u, p) {
 
 /** Deep clean site fetching - Updated to include employee region */
 function portal_getFilteredStaff(c, r, s) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS();
   const sheet = ss.getSheetByName('Employees');
   if (!sheet) return [];
   const data = sheet.getDataRange().getDisplayValues();
@@ -144,7 +176,7 @@ function portal_getFilteredStaff(c, r, s) {
 
 /** Fetches replacement pool from separate tab */
 function portal_getReplacementPool() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS();
   const sheet = ss.getSheetByName('ReplacementPool');
   if (!sheet) return { regions: [], allStaff: [] };
   const data = sheet.getDataRange().getDisplayValues();
@@ -315,7 +347,7 @@ function ensureAttendanceColumns(sheet) {
  * credentials must not grant head-office access.
  */
 function portal_verifyAdmin(u, p) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS();
   const sheet = ss.getSheetByName('AdminUsers');
   if (!sheet) return { status: "Error", message: "No AdminUsers sheet found." };
   const data = sheet.getDataRange().getValues();
@@ -337,7 +369,7 @@ function portal_verifyAdmin(u, p) {
  * has no usable numbers — callers treat null as "can't verify", not "failed".
  */
 function getSiteCoordinates(siteName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS();
   const sheet = ss.getSheetByName('SiteLocations');
   if (!sheet) return null;
   const data = sheet.getDataRange().getValues();
@@ -384,7 +416,7 @@ function isWithinShiftGracePeriod(shiftStart, shiftType, captureTimestamp) {
   if (startMins === null || !captureTimestamp) return null;
   const captured = new Date(captureTimestamp);
   if (isNaN(captured.getTime())) return null;
-  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const tz = getSS().getSpreadsheetTimeZone();
   const captureMins = timeToMins(Utilities.formatDate(captured, tz, "HH:mm"));
   if (captureMins === null) return null;
   return clockDiffMins(startMins, captureMins) <= SHIFT_GRACE_MINS;
@@ -429,7 +461,7 @@ function buildComplianceValues(payload) {
 /** portal_commitAttendanceRow */
 function portal_commitAttendanceRow(payload, isLateEntry = false, skipEmail = false, isEarlyEntry = false) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     let attSheet = ss.getSheetByName('Attendance') || ss.insertSheet('Attendance');
     let repSheet = ss.getSheetByName('Replacements') || ss.insertSheet('Replacements');
 
@@ -566,7 +598,7 @@ function portal_commitAttendanceRow(payload, isLateEntry = false, skipEmail = fa
  */
 function portal_commitEndShift(payload) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const attSheet = ss.getSheetByName('Attendance');
     if (!attSheet) return { status: "Error", message: "No Attendance sheet found yet — submit the morning register first." };
     const lastRow = attSheet.getLastRow();
@@ -723,7 +755,7 @@ function portal_commitEndShift(payload) {
  */
 function portal_getAttendanceByDateRange(req) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const attSheet = ss.getSheetByName('Attendance');
     if (!attSheet) return { status: "Success", rows: [] };
     const lastRow = attSheet.getLastRow();
@@ -777,7 +809,7 @@ function portal_getAttendanceByDateRange(req) {
  */
 function portal_getSiteLocations() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('SiteLocations');
     if (!sheet) return { status: "Success", rows: [] };
     const lastRow = sheet.getLastRow();
@@ -797,7 +829,7 @@ function portal_getSiteLocations() {
  */
 function portal_getSubmissionPhotos(req) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('Attendance');
     if (!sheet) return { status: "Error", message: "No Attendance sheet found." };
     const row = findExistingSubmissionRow(sheet, req && req.submissionId, 15);
@@ -819,7 +851,7 @@ function portal_getSubmissionPhotos(req) {
  */
 function portal_getAllEmployees() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('Employees');
     if (!sheet) return { status: "Success", rows: [] };
     const lastRow = sheet.getLastRow();
@@ -838,7 +870,7 @@ function portal_getAllEmployees() {
 /** Appends an employee. Status defaults to Active. */
 function portal_addEmployee(emp) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('Employees');
     if (!sheet) return { status: "Error", message: "No Employees sheet found." };
     if (!emp || !(emp.firstName || "").toString().trim()) return { status: "Error", message: "First name is required." };
@@ -858,7 +890,7 @@ function portal_addEmployee(emp) {
  */
 function portal_updateEmployee(emp) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('Employees');
     if (!sheet) return { status: "Error", message: "No Employees sheet found." };
     const r = parseInt(emp && emp.sheetRow, 10);
@@ -888,7 +920,7 @@ function portal_updateEmployee(emp) {
  */
 function portal_deactivateEmployee(req) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('Employees');
     if (!sheet) return { status: "Error", message: "No Employees sheet found." };
     const r = parseInt(req && req.sheetRow, 10);
@@ -904,7 +936,7 @@ function portal_deactivateEmployee(req) {
 /** Every replacement-pool member, including deactivated, for the admin directory. */
 function portal_getAllReplacements() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('ReplacementPool');
     if (!sheet) return { status: "Success", rows: [] };
     const lastRow = sheet.getLastRow();
@@ -922,7 +954,7 @@ function portal_getAllReplacements() {
 /** Appends a replacement-pool member. */
 function portal_addReplacement(rep) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('ReplacementPool');
     if (!sheet) return { status: "Error", message: "No ReplacementPool sheet found." };
     if (!rep || !(rep.firstName || "").toString().trim()) return { status: "Error", message: "First name is required." };
@@ -938,7 +970,7 @@ function portal_addReplacement(rep) {
 /** Updates one replacement-pool member, addressed by sheetRow. */
 function portal_updateReplacement(rep) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('ReplacementPool');
     if (!sheet) return { status: "Error", message: "No ReplacementPool sheet found." };
     const r = parseInt(rep && rep.sheetRow, 10);
@@ -966,7 +998,7 @@ function portal_updateReplacement(rep) {
  */
 function portal_deleteReplacement(req) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName('ReplacementPool');
     if (!sheet) return { status: "Error", message: "No ReplacementPool sheet found." };
     const r = parseInt(req && req.sheetRow, 10);
@@ -987,7 +1019,7 @@ function portal_deleteReplacement(req) {
  */
 function getRecipientsForCompany(company) {
   const FALLBACK_EMAIL = "sbalist45@gmail.com";
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS();
   const sheet = ss.getSheetByName('CompanyEmails');
   if (!sheet) return FALLBACK_EMAIL;
 
