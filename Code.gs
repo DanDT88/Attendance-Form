@@ -23,9 +23,12 @@ const SPREADSHEET_ID_OVERRIDE = "";
 
 /** The spreadsheet this run operates on. See SPREADSHEET_ID_OVERRIDE above. */
 function getSS() {
-  return SPREADSHEET_ID_OVERRIDE
-    ? SpreadsheetApp.openById(SPREADSHEET_ID_OVERRIDE)
-    : SpreadsheetApp.getActiveSpreadsheet();
+  if (SPREADSHEET_ID_OVERRIDE) return SpreadsheetApp.openById(SPREADSHEET_ID_OVERRIDE);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // A standalone project has no active spreadsheet, so this would otherwise
+  // surface downstream as "Cannot read properties of null (getSheetByName)".
+  if (!ss) throw new Error("This script is not bound to a spreadsheet. Set SPREADSHEET_ID_OVERRIDE at the top of Code.gs to the spreadsheet id.");
+  return ss;
 }
 
 /**
