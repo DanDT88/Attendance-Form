@@ -1,11 +1,19 @@
-const CACHE_NAME = 'attendance-portal-v1';
+// Bumped from v1 because the app moved from index.html to attendance.html:
+// a returning device must drop the old shell or it keeps serving the previous
+// index.html (the app) in place of the new landing page.
+const CACHE_NAME = 'attendance-portal-v2';
 const ASSETS = [
   './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './index.html',        // landing page
+  './attendance.html',   // the supervisor app (was index.html)
+  './admin.html',
+  './config.js',
+  './manifest.json'
 ];
+// icon-192.png and icon-512.png used to be listed here but have never existed
+// in this repo. cache.addAll is atomic, so those two 404s were failing the
+// whole install — meaning the app shell was never actually being cached and
+// offline mode was relying on the plain HTTP cache.
  
 // APPS_SCRIPT_URL comes from the same config.js the pages use, so the service
 // worker can never drift onto a different deployment than the app — which is

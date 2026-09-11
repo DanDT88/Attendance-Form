@@ -1,961 +1,112 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Corporate Attendance Portal</title>
-    <link rel="manifest" href="./manifest.json">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#1B365D">
+    <title>Delta Attendance Platform</title>
+    <link rel="manifest" href="./manifest.json">
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-      :root { --navy: #1B365D; --slate: #4A5568; --bg: #F0F2F5; --border: #E2E8F0; --present-green: #38A169; --absent-red: #E53E3E; --late-orange: #DD6B20; --white: #FFFFFF; }
+      /* Same tokens as attendance.html and admin.html — one product, one look. */
+      :root { --navy: #1B365D; --slate: #4A5568; --bg: #F0F2F5; --border: #E2E8F0; --present-green: #38A169; --white: #FFFFFF; }
       body { font-family: 'Inter', sans-serif; background-color: var(--bg); margin: 0; padding: 12px; color: var(--slate); line-height: 1.5; -webkit-tap-highlight-color: transparent; }
-      .container { width: 100%; max-width: 500px; margin: 0 auto; }
-      .card { background: var(--white); padding: 24px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); border-top: 8px solid var(--navy); margin-bottom: 24px; }
-      h1 { font-size: 22px; color: var(--navy); text-align: center; margin: 0; text-transform: uppercase; font-weight: 800; }
-      h2 { font-size: 14px; color: var(--slate); text-align: center; margin: 6px 0 16px; font-weight: 500; opacity: 0.8; }
-      h3 { font-size: 13px; color: var(--navy); text-align: center; text-transform: uppercase; border-bottom: 1px solid #EEE; padding-bottom: 12px; margin-bottom: 16px; font-weight: 700; }
-      .tabs { display: flex; gap: 8px; margin-bottom: 24px; background: #E4E6EB; padding: 6px; border-radius: 10px; }
-      .tab-btn { flex: 1; padding: 10px; cursor: pointer; border: none; background: none; font-weight: 600; font-size: 12px; border-radius: 8px; color: var(--slate); }
-      .tab-btn.active { background: var(--white); color: var(--navy); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-      label { display: block; font-weight: 700; margin-top: 14px; font-size: 10px; color: var(--navy); text-transform: uppercase; }
-      input, select, textarea { width: 100%; padding: 12px; margin-top: 6px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; box-sizing: border-box; outline: none; background: #F8FAFC; }
-      input:disabled, select:disabled { background: #EDF0F3; color: var(--slate); opacity: 0.85; cursor: not-allowed; }
-      button:disabled { opacity: 0.6; cursor: not-allowed; }
-      .stats-bar { display: flex; gap: 12px; margin: 20px 0; }
-      .stat-item { flex: 1; text-align: center; padding: 14px; background: #F8FAFC; border: 1px solid var(--border); border-radius: 12px; }
-      .stat-val { display: block; font-size: 22px; font-weight: 800; color: var(--navy); }
-      .stat-label { font-size: 9px; text-transform: uppercase; font-weight: 700; }
-      .emp-row { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
-      .emp-flex { display: flex; align-items: center; justify-content: space-between; }
-      .btn-toggle { padding: 10px 16px; border: 1px solid var(--border); border-radius: 8px; background: #F1F5F9; cursor: pointer; font-size: 12px; font-weight: 700; min-width: 60px; }
-      .active-present { background: var(--present-green) !important; color: white !important; border-color: var(--present-green); }
-      .active-absent { background: var(--absent-red) !important; color: white !important; border-color: var(--absent-red); }
-      .status-tag { font-size: 9px; padding: 3px 6px; border-radius: 5px; font-weight: 800; margin-left: 6px; background: #FFF5F5; color: var(--late-orange); border: 1px solid var(--late-orange); text-transform: uppercase; }
-      .absence-box { margin-top: 12px; padding: 12px; background: #FFF5F5; border-radius: 10px; border-left: 4px solid var(--absent-red); }
-      .replacement-select { margin-top: 8px; border: 1px solid #feb2b2; background: white !important; }
-      .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
-      .upload-box { border: 2px dashed #CBD5E0; border-radius: 12px; padding: 12px; text-align: center; cursor: pointer; min-height: 90px; display: flex; flex-direction: column; justify-content: center; background: #F8FAFC; }
-      .upload-box img { width: 100%; max-height: 140px; object-fit: cover; border-radius: 8px; margin-top: 8px; border: 1px solid #E2E8F0; }
-      .btn-main { width: 100%; padding: 16px; background: var(--navy); color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 24px; text-transform: uppercase; font-size: 14px; box-shadow: 0 4px 12px rgba(27,54,93,0.2); }
-      .toast { position: fixed; bottom: 30px; left: 20px; right: 20px; background: #333; color: white; padding: 14px; border-radius: 10px; text-align: center; font-size: 14px; font-weight: 600; display: none; z-index: 3000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-      .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(27,54,93,0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 4000; }
-      .modal-overlay.show { display: flex; }
-      .modal-box { background: var(--white); width: 100%; max-width: 360px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.20); border-top: 8px solid var(--navy); box-sizing: border-box; text-align: center; }
-      .modal-msg { font-size: 14px; font-weight: 500; color: var(--slate); white-space: pre-wrap; }
-      .modal-box .btn-main { margin-top: 20px; }
+      .container { width: 100%; max-width: 520px; margin: 0 auto; padding-block: 24px; }
+      .masthead { text-align: center; margin-bottom: 28px; }
+      h1 { font-size: 22px; color: var(--navy); margin: 0; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; }
+      h2 { font-size: 14px; color: var(--slate); margin: 6px 0 0; font-weight: 500; opacity: 0.8; }
+
+      /* Each choice is a .card the whole surface of which is the tap target —
+         these get used on phones in the field, so nothing small to aim at. */
+      .choice {
+        display: block; text-decoration: none; background: var(--white); padding: 24px;
+        border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+        border-top: 8px solid var(--navy); margin-bottom: 20px; color: inherit;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .choice:hover, .choice:focus-visible { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(0,0,0,0.12); outline: none; }
+      .choice:focus-visible { border-top-color: var(--present-green); }
+      .choice-admin { border-top-color: var(--slate); }
+      .choice-head { display: flex; align-items: center; gap: 14px; }
+      .choice-icon { flex: 0 0 46px; height: 46px; border-radius: 12px; background: #F1F5F9; display: flex; align-items: center; justify-content: center; }
+      .choice-icon svg { width: 24px; height: 24px; stroke: var(--navy); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+      .choice-admin .choice-icon svg { stroke: var(--slate); }
+      .choice-title { font-size: 17px; font-weight: 700; color: var(--navy); }
+      .choice-admin .choice-title { color: var(--slate); }
+      .choice-sub { font-size: 12px; font-weight: 500; margin-top: 2px; }
+      .choice-body { font-size: 13px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #EEE; }
+      .choice-go { display: inline-block; margin-top: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--navy); }
+      .choice-admin .choice-go { color: var(--slate); }
+
+      .footnote { text-align: center; font-size: 11px; color: #94A3B8; margin-top: 8px; }
+      .badge-offline { text-align: center; font-size: 11px; font-weight: 700; border-radius: 8px; padding: 8px; margin-bottom: 18px; color: #E53E3E; background: #FDECEC; border: 1px solid #E53E3E; }
       .hidden { display: none; }
-      .loading-msg { text-align: center; padding: 30px; font-size: 14px; font-weight: 600; color: var(--navy); }
-      .badge { text-align: center; font-size: 11px; font-weight: 700; border-radius: 8px; padding: 8px; margin-bottom: 14px; }
-      .badge-sync { color: var(--late-orange); background: #FFF5E5; border: 1px solid var(--late-orange); }
-      .badge-offline { color: var(--absent-red); background: #FDECEC; border: 1px solid var(--absent-red); }
+      @media (max-width: 380px) { .choice { padding: 20px; } h1 { font-size: 19px; } }
     </style>
   </head>
   <body>
- 
-    <div id="toast" class="toast">Action Successful</div>
- 
-    <div id="alertModal" class="modal-overlay">
-      <div class="modal-box" role="alertdialog" aria-modal="true" aria-describedby="alertModalMsg">
-        <div id="alertModalMsg" class="modal-msg"></div>
-        <button type="button" class="btn-main" id="alertModalOk" onclick="closeAlert()">OK</button>
-      </div>
-    </div>
-
     <div class="container">
-      <!-- LOGIN -->
-      <div id="loginView" class="card">
-        <h1>PORTAL LOGIN</h1>
+
+      <div class="masthead">
+        <h1>Delta Attendance</h1>
         <h2>Corporate Management System</h2>
-        <div id="loginConnNote" class="badge badge-offline hidden">No internet connection. First login needs connectivity — after that, this app works offline.</div>
-        <label>Username</label><input type="text" id="user" placeholder="Your username">
-        <label>Password</label><input type="password" id="pass" placeholder="••••••••">
-        <button class="btn-main" id="loginBtn" onclick="login()">Log In</button>
       </div>
- 
-      <!-- APP -->
-      <div id="appView" class="card hidden">
-        <h1 id="mainComp">...</h1>
-        <h2 id="subRegionSite">...</h2>
-        <h3>Attendance Management</h3>
- 
-        <div id="connBadge" class="badge badge-offline hidden"></div>
-        <div id="syncBadge" class="badge badge-sync hidden"></div>
- 
-        <div class="tabs">
-          <div id="tabReg" class="tab-btn active" onclick="switchTab('register')">Attendance</div>
-          <div id="tabLate" class="tab-btn" onclick="switchTab('late')">Lateness</div>
-          <div id="tabEarly" class="tab-btn" onclick="switchTab('early')">Left Early</div>
-          <div id="tabEndShift" class="tab-btn" onclick="switchTab('endshift')">End Shift</div>
-        </div>
- 
-        <div id="sectionRegister">
-          <div style="display:flex; gap:12px;">
-            <div style="flex:1;"><label>Date</label><input type="date" id="regDate"></div>
-            <div style="flex:1;"><label>Shift Type</label>
-              <select id="shiftType" onchange="resetLateUI()">
-                <option value="Day">Day Shift</option>
-                <option value="Night">Night Shift</option>
-              </select>
-            </div>
-          </div>
-          <div style="display:flex; gap:12px;">
-            <div style="flex:1;"><label>Start Shift</label><input type="time" id="shiftStartTime" onchange="updateShiftValue()"></div>
-          </div>
-          <input type="hidden" id="shift" value="">
-          <div class="stats-bar">
-            <div class="stat-item"><span class="stat-val" id="cntP">0</span><span class="stat-label">Present/Late</span></div>
-            <div class="stat-item"><span class="stat-val" id="cntA" style="color:var(--absent-red)">0</span><span class="stat-label">Absent</span></div>
-          </div>
- 
-          <div id="staffList"><div class="loading-msg">Fetching Staff...</div></div>
- 
-          <label>Required Verification Photos</label>
-          <div class="upload-grid">
-             <div class="upload-box" onclick="document.getElementById('fileSup').click()">
-               <input type="file" id="fileSup" class="hidden" accept="image/*" capture="environment" onchange="handleFile(this, 'supPrev', 'supData', 'supLabel')">
-               <span id="supLabel" style="font-size:10px; font-weight:700;">SUPERVISOR</span>
-               <img id="supPrev" class="hidden"><input type="hidden" id="supData">
-             </div>
-             <div class="upload-box" onclick="document.getElementById('fileStaff').click()">
-               <input type="file" id="fileStaff" class="hidden" accept="image/*" capture="environment" onchange="handleStaffFiles(this)">
-               <span id="staffLabel" style="font-size:10px; font-weight:700;">GROUP PHOTO</span>
-               <img id="staffPrev" class="hidden"><input type="hidden" id="staffData">
-             </div>
-          </div>
- 
-          <div style="margin-top:24px; border-top: 1px solid #eee; padding-top:16px;">
-            <label>Supervisor Full Name</label>
-            <input type="text" id="signOffName" placeholder="Type name to acknowledge">
-          </div>
- 
-          <button class="btn-main" id="regSubmitBtn" onclick="submitRegister()">Submit Register</button>
-        </div>
- 
-        <div id="sectionLate" class="hidden">
-          <label>Select Staff Member</label>
-          <select id="lateEmpSelect" onchange="resetLateUI()"></select>
-          <div style="background:#F8FAFC; padding:20px; border-radius:14px; margin-top:12px; border:1px solid var(--border);">
-            <label>Actual Arrival Time</label>
-            <input type="time" id="arrivalTime" onchange="updateLateCalc()">
-            <div id="lateResult" style="margin-top:16px; text-align:center;">
-              <span id="lateStatus" style="font-weight:bold; font-size:11px; text-transform:uppercase;"></span>
-              <span id="lateDuration" style="display:block; font-size:26px; font-weight:800; color:var(--absent-red)"></span>
-            </div>
-            <label>Reason</label><textarea id="lateReason" placeholder="Explain the delay..."></textarea>
-          </div>
-          <button class="btn-main" id="lateSubmitBtn" onclick="submitLate()">Confirm Lateness</button>
- 
-          <div id="lateLogContainer" class="hidden" style="margin-top:24px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
-              <thead><tr><th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Name</th><th style="padding:8px; border-bottom:1px solid #ddd;">Mins</th><th style="padding:8px; border-bottom:1px solid #ddd;">Action</th></tr></thead>
-              <tbody id="lateLogBody"></tbody>
-            </table>
-          </div>
-        </div>
 
-        <div id="sectionEarly" class="hidden">
-          <label>Select Staff Member</label>
-          <select id="earlyEmpSelect" onchange="resetEarlyUI()"></select>
-          <div style="background:#F8FAFC; padding:20px; border-radius:14px; margin-top:12px; border:1px solid var(--border);">
-            <label>Time They Left</label>
-            <input type="time" id="earlyTimeLeft">
-            <label>Reason</label><textarea id="earlyReason" placeholder="Explain why they left early (e.g. sent to another site)..."></textarea>
-          </div>
-          <button class="btn-main" id="earlySubmitBtn" onclick="submitEarly()">Confirm Left Early</button>
-
-          <div id="earlyLogContainer" class="hidden" style="margin-top:24px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
-              <thead><tr><th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Name</th><th style="padding:8px; border-bottom:1px solid #ddd;">Left At</th><th style="padding:8px; border-bottom:1px solid #ddd;">Action</th></tr></thead>
-              <tbody id="earlyLogBody"></tbody>
-            </table>
-          </div>
-        </div>
- 
-        <div id="sectionEndShift" class="hidden">
-          <div style="background:#F8FAFC; padding:20px; border-radius:14px; margin-top:12px; border:1px solid var(--border);">
-            <p style="margin:0 0 4px; font-size:12px;">Closes out the shift dated on the Attendance tab (<span id="endShiftDateLabel">—</span>) for this site — fill this in once the shift has actually ended.</p>
-            <label>End Shift Time</label>
-            <input type="time" id="shiftEndTime">
-          </div>
-
-          <label>Required Verification Photos</label>
-          <div class="upload-grid">
-             <div class="upload-box" onclick="document.getElementById('fileEndSup').click()">
-               <input type="file" id="fileEndSup" class="hidden" accept="image/*" capture="environment" onchange="handleFile(this, 'endSupPrev', 'endSupData', 'endSupLabel')">
-               <span id="endSupLabel" style="font-size:10px; font-weight:700;">SUPERVISOR</span>
-               <img id="endSupPrev" class="hidden"><input type="hidden" id="endSupData">
-             </div>
-             <div class="upload-box" onclick="document.getElementById('fileEndStaff').click()">
-               <input type="file" id="fileEndStaff" class="hidden" accept="image/*" capture="environment" onchange="handleEndStaffFiles(this)">
-               <span id="endStaffLabel" style="font-size:10px; font-weight:700;">GROUP PHOTO</span>
-               <img id="endStaffPrev" class="hidden"><input type="hidden" id="endStaffData">
-             </div>
-          </div>
-
-          <button class="btn-main" id="endShiftSubmitBtn" onclick="submitEndShift()">Submit End Shift</button>
-        </div>
- 
-        <button class="btn-main" style="background:#F1F5F9; color:var(--absent-red); margin-top:32px; box-shadow:none; border: 1px solid #E2E8F0;" onclick="logout()">LOGOUT</button>
+      <div id="offlineNote" class="badge-offline hidden">
+        No internet connection. Attendance still works offline; the dashboard needs connectivity.
       </div>
+
+      <a class="choice" href="./attendance.html">
+        <div class="choice-head">
+          <span class="choice-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </span>
+          <span>
+            <div class="choice-title">Attendance</div>
+            <div class="choice-sub">Site supervisors</div>
+          </span>
+        </div>
+        <div class="choice-body">
+          Mark the daily register, log lateness and early departures, capture verification photos and close out the shift.
+          <div class="choice-go">Open attendance &rsaquo;</div>
+        </div>
+      </a>
+
+      <a class="choice choice-admin" href="./admin.html">
+        <div class="choice-head">
+          <span class="choice-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+          </span>
+          <span>
+            <div class="choice-title">Admin Dashboard</div>
+            <div class="choice-sub">Head office</div>
+          </span>
+        </div>
+        <div class="choice-body">
+          Today's overview across sites, reports and trends, the staff directory, and compliance review of photo location and timing.
+          <div class="choice-go">Open dashboard &rsaquo;</div>
+        </div>
+      </a>
+
+      <p class="footnote">Separate logins — supervisor credentials do not open the dashboard.</p>
     </div>
- 
-    <canvas id="canvas" class="hidden"></canvas>
- 
-    <!-- APPS_SCRIPT_URL comes from config.js — the single place it is defined.
-         Must load BEFORE the main script below, which uses it. -->
-    <script src="./config.js"></script>
+
     <script>
-      // =====================================================================
-      // CONFIG — APPS_SCRIPT_URL is defined in config.js, loaded just above.
-      // Point that one file at a different deployment to switch environments.
-      // =====================================================================
+      // The attendance app works offline; the dashboard does not. Say so up front
+      // rather than letting someone tap through to a page that can't load.
+      (function () {
+        const note = document.getElementById('offlineNote');
+        const sync = () => note.classList.toggle('hidden', navigator.onLine);
+        sync();
+        window.addEventListener('online', sync);
+        window.addEventListener('offline', sync);
+      })();
 
-      let userSession = {}; let employees = []; let registerState = {}; let hasGroupPhoto = false; let hasEndGroupPhoto = false; let sessionFirstRow = null;
-      let replacementPool = { regions: [], allStaff: [] }; let lateRecordsLog = []; let earlyRecordsLog = [];
-      let currentLocation = "Location: Fetching...";
-      let registerSubmitLock = false; // prevents double-clicks/duplicate taps from firing two separate submissions
-      let lateSubmitLock = false;
-      let earlySubmitLock = false;
-      let endShiftSubmitLock = false;
- 
-      /** Generates a unique ID for a submission attempt. The SAME id is reused across
-       *  automatic retries of that one submission (via the offline queue), so the server
-       *  can recognize a retry and avoid sending a duplicate email. A genuinely new manual
-       *  submit click always gets a fresh id. */
-      function generateId() {
-        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
-        return 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+      // Registered here too so the landing page itself is available offline —
+      // same scope and same worker the attendance app uses.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
       }
- 
-      /* Runs once at startup purely to warm the permission prompt and give the
-       * first stamp something to show. The authoritative per-photo fix comes
-       * from geolocatePromise() at capture time — see below. */
-      function fetchLocation() {
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            pos => currentLocation = `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
-            err => currentLocation = "Location: Unavailable"
-          );
-        }
-      }
-
-      /* Geolocation is read fresh for every single photo instead of being taken
-       * from a value cached at page load. A supervisor who opens the app before
-       * arriving on site would otherwise stamp every photo of that session with
-       * wherever they happened to open it, which makes the whole location stamp
-       * worthless for compliance. Resolves to null rather than rejecting, so a
-       * denied or timed-out fix never blocks the photo itself. */
-      function geolocatePromise() {
-        return new Promise((resolve) => {
-          if (!navigator.geolocation) return resolve(null);
-          navigator.geolocation.getCurrentPosition(
-            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            () => resolve(null),
-            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-          );
-        });
-      }
-
-      /* Raw per-photo coordinates and capture time, keyed by the hidden input id
-       * holding the image. The visual stamp baked into the pixels can't be read
-       * back by the server, so the same facts are kept here as structured data
-       * and sent with the register. */
-      let photoMeta = {};
-      function photoMetaFor(dataId) { return photoMeta[dataId] || { lat: null, lng: null, capturedAt: null }; }
- 
-      function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.display = 'block'; setTimeout(() => { t.style.display = 'none'; }, 4000); }
- 
-      // In-app stand-in for native alert(): HtmlService renders alert() as an
-      // "An embedded page at ...googleusercontent.com says" dialog, which looks broken.
-      // Blocking-style (must tap OK) but non-blocking in code, so callers keep using
-      // `return showAlert(...)` to stop a submit the same way `return alert(...)` did.
-      function showAlert(msg) {
-        document.getElementById('alertModalMsg').innerText = msg;
-        document.getElementById('alertModal').classList.add('show');
-        document.getElementById('alertModalOk').focus();
-      }
-
-      function closeAlert() { document.getElementById('alertModal').classList.remove('show'); }
-
-      function logout() {
-        localStorage.removeItem('lastActiveUser'); // keeps cachedApp_<user> intact so this user can still log in offline next time
-        userSession = {}; employees = []; registerState = {}; hasGroupPhoto = false; hasEndGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = []; earlyRecordsLog = []; photoMeta = {};
-        registerSubmitLock = false; lateSubmitLock = false; earlySubmitLock = false; endShiftSubmitLock = false;
-        document.getElementById('appView').classList.add('hidden');
-        document.getElementById('loginView').classList.remove('hidden');
-        document.getElementById('user').value = ""; document.getElementById('pass').value = "";
-        document.getElementById('staffList').innerHTML = '<div class="loading-msg">Fetching Staff...</div>';
-        document.getElementById('signOffName').value = "";
-        document.getElementById('supPrev').classList.add('hidden'); document.getElementById('supData').value = "";
-        document.getElementById('staffPrev').classList.add('hidden'); document.getElementById('staffData').value = "";
-        document.getElementById('supLabel').classList.remove('hidden'); document.getElementById('staffLabel').classList.remove('hidden');
-        document.getElementById('endSupPrev').classList.add('hidden'); document.getElementById('endSupData').value = "";
-        document.getElementById('endStaffPrev').classList.add('hidden'); document.getElementById('endStaffData').value = "";
-        document.getElementById('endSupLabel').classList.remove('hidden'); document.getElementById('endStaffLabel').classList.remove('hidden');
-        document.getElementById('lateLogContainer').classList.add('hidden');
-        document.getElementById('earlyLogContainer').classList.add('hidden');
-        document.getElementById('shiftStartTime').value = ""; document.getElementById('shiftEndTime').value = ""; document.getElementById('shift').value = ""; document.getElementById('shiftType').value = "Day";
-        document.getElementById('endShiftSubmitBtn').innerText = "Submit End Shift"; document.getElementById('endShiftSubmitBtn').disabled = false;
-        document.getElementById('regSubmitBtn').innerText = "Submit Register";
-        showToast("Logged out.");
-      }
- 
-      function switchTab(tab) {
-        document.getElementById('sectionRegister').classList.toggle('hidden', tab !== 'register');
-        document.getElementById('sectionLate').classList.toggle('hidden', tab !== 'late');
-        document.getElementById('sectionEarly').classList.toggle('hidden', tab !== 'early');
-        document.getElementById('sectionEndShift').classList.toggle('hidden', tab !== 'endshift');
-        document.getElementById('tabReg').classList.toggle('active', tab === 'register');
-        document.getElementById('tabLate').classList.toggle('active', tab === 'late');
-        document.getElementById('tabEarly').classList.toggle('active', tab === 'early');
-        document.getElementById('tabEndShift').classList.toggle('active', tab === 'endshift');
-        if(tab === 'late') populateLateDropdown();
-        if(tab === 'early') populateEarlyDropdown();
-        if(tab === 'endshift') document.getElementById('endShiftDateLabel').innerText = document.getElementById('regDate').value || "—";
-      }
- 
-      // =====================================================================
-      // NETWORK LAYER — fetch() to the Apps Script API, with an IndexedDB
-      // offline queue for anything that fails or has no connection.
-      // =====================================================================
-      function apiCall(action, data = {}) {
-        return new Promise((resolve, reject) => {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 55000); // generous — commit runs PDF generation + email sending server-side, which can take a while
-          fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
-            body: JSON.stringify({ action, ...data }),
-            signal: controller.signal
-          })
-            .then((res) => res.json())
-            .then((json) => { clearTimeout(timeout); resolve(json); })
-            .catch((err) => { clearTimeout(timeout); reject(err); });
-        });
-      }
- 
-      const DB_NAME = 'AttendanceOfflineDB';
-      const STORE_NAME = 'queue';
-      let dbPromise = null;
- 
-      function openDB() {
-        if (dbPromise) return dbPromise;
-        dbPromise = new Promise((resolve, reject) => {
-          const req = indexedDB.open(DB_NAME, 1);
-          req.onupgradeneeded = () => {
-            const db = req.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-          };
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        });
-        return dbPromise;
-      }
- 
-      async function queuePut(item) {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_NAME, 'readwrite');
-          tx.objectStore(STORE_NAME).put(item);
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        }).then(() => requestBackgroundSync());
-      }
- 
-      // Chrome/Android only — Safari/iOS has no Background Sync API, so this
-      // silently does nothing there; those devices still sync fine on next app open
-      // (the setInterval(flushQueue, 20000) safety net covers that case for everyone).
-      async function requestBackgroundSync() {
-        if ('serviceWorker' in navigator && 'SyncManager' in window) {
-          try {
-            const reg = await navigator.serviceWorker.ready;
-            await reg.sync.register('sync-attendance');
-          } catch (err) { /* not supported / registration failed — safe to ignore */ }
-        }
-      }
- 
-      async function queueDelete(id) {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_NAME, 'readwrite');
-          tx.objectStore(STORE_NAME).delete(id);
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        });
-      }
- 
-      async function queueGetAll() {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction(STORE_NAME, 'readonly');
-          const req = tx.objectStore(STORE_NAME).getAll();
-          req.onsuccess = () => resolve(req.result || []);
-          req.onerror = () => reject(req.error);
-        });
-      }
- 
-      async function updateSyncBadge() {
-        const items = await queueGetAll();
-        const badge = document.getElementById('syncBadge');
-        if (!badge) return;
-        if (items.length === 0) { badge.classList.add('hidden'); badge.innerText = ""; return; }
-        badge.classList.remove('hidden');
-        badge.innerText = `${items.length} submission${items.length > 1 ? 's' : ''} waiting to sync...`;
-      }
- 
-      function updateConnBadge() {
-        const badge = document.getElementById('connBadge');
-        const note = document.getElementById('loginConnNote');
-        if (navigator.onLine) {
-          if (badge) badge.classList.add('hidden');
-          if (note) note.classList.add('hidden');
-        } else {
-          if (badge) { badge.classList.remove('hidden'); badge.innerText = "Offline — submissions will sync automatically once you're back online."; }
-          if (note) note.classList.remove('hidden');
-        }
-      }
-      window.addEventListener('online', updateConnBadge);
-      window.addEventListener('offline', updateConnBadge);
- 
-      /** Try live, fall back to the offline queue if there's no connection or the call fails/times out. */
-      function apiCallOrQueue(action, data, queueId, queueType, onLiveSuccess) {
-        return new Promise((resolve) => {
-          if (!navigator.onLine) {
-            queuePut({ id: queueId, type: queueType, action, data, ts: Date.now() })
-              .then(() => { updateSyncBadge(); resolve({ queued: true }); });
-            return;
-          }
-          apiCall(action, data)
-            .then((res) => { if (onLiveSuccess) onLiveSuccess(res); resolve({ queued: false, result: res }); })
-            .catch(() => {
-              queuePut({ id: queueId, type: queueType, action, data, ts: Date.now() })
-                .then(() => { updateSyncBadge(); resolve({ queued: true }); });
-            });
-        });
-      }
- 
-      let isSyncing = false;
-      async function flushQueue() {
-        if (isSyncing || !navigator.onLine) return;
-        isSyncing = true;
-        try {
-          const items = await queueGetAll();
-          for (const item of items) {
-            try {
-              // NOTE: item.data.payload.submissionId is preserved unchanged across retries,
-              // so if a prior attempt actually succeeded server-side, the server detects the
-              // duplicate and returns the existing row instead of re-sending the email.
-              const res = await apiCall(item.action, item.data);
-              await queueDelete(item.id);
-              if (item.type === 'register' && res && res.status === 'Success') {
-                sessionFirstRow = res.firstRow;
-                const btn = document.getElementById('regSubmitBtn');
-                if (btn) { btn.innerText = "Update & Resend Email"; btn.disabled = false; }
-                registerSubmitLock = false;
-              }
-              if (item.type === 'late' && res && res.status === 'Success') {
-                const btn = document.getElementById('lateSubmitBtn');
-                if (btn) btn.disabled = false;
-                lateSubmitLock = false;
-              }
-              if (item.type === 'early' && res && res.status === 'Success') {
-                const btn = document.getElementById('earlySubmitBtn');
-                if (btn) btn.disabled = false;
-                earlySubmitLock = false;
-              }
-              if (item.type === 'endshift' && res && res.status === 'Success') {
-                const btn = document.getElementById('endShiftSubmitBtn');
-                if (btn) { btn.disabled = false; btn.innerText = "Submit End Shift"; }
-                endShiftSubmitLock = false;
-              }
-            } catch (e) { /* still offline / failed — leave it queued, retry next pass */ }
-          }
-        } finally {
-          await updateSyncBadge();
-          isSyncing = false;
-        }
-      }
- 
-      window.addEventListener('online', flushQueue);
-      setInterval(flushQueue, 20000); // safety net: navigator.onLine can be unreliable
- 
-      // =====================================================================
-      // OFFLINE SESSION CACHE — lets you keep using the app after the first
-      // successful online login, without needing to log in again offline.
-      // =====================================================================
-      function userKey(u) { return (u || (userSession && userSession.user) || '').toString().toLowerCase().trim(); }
- 
-      function cacheSession() {
-        try {
-          const key = userKey();
-          localStorage.setItem('cachedApp_' + key, JSON.stringify({ userSession, employees, replacementPool, cachedAt: Date.now() }));
-          localStorage.setItem('lastActiveUser', key);
-        } catch (e) {}
-      }
- 
-      // Saved per-user login (persists across logout) so the login SCREEN itself
-      // works offline too — not just auto-resuming the last active session.
-      function saveOfflineCredential(u, p, session) {
-        try {
-          const all = JSON.parse(localStorage.getItem('savedCredentials') || '{}');
-          all[u.toLowerCase().trim()] = { pass: p.toLowerCase().trim(), session };
-          localStorage.setItem('savedCredentials', JSON.stringify(all));
-        } catch (e) {}
-      }
- 
-      function getOfflineCredential(u) {
-        try {
-          const all = JSON.parse(localStorage.getItem('savedCredentials') || '{}');
-          return all[u.toLowerCase().trim()] || null;
-        } catch (e) { return null; }
-      }
- 
-      function tryOfflineRestore() {
-        if (navigator.onLine) return false;
-        const lastUser = localStorage.getItem('lastActiveUser');
-        if (!lastUser) return false;
-        const raw = localStorage.getItem('cachedApp_' + lastUser);
-        if (!raw) return false;
-        try {
-          const cached = JSON.parse(raw);
-          userSession = cached.userSession;
-          employees = cached.employees || [];
-          replacementPool = cached.replacementPool || { regions: [], allStaff: [] };
-          registerState = {}; hasGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = [];
-          enterApp();
-          renderStaffList();
-          showToast("Offline mode — using data from your last login.");
-          return true;
-        } catch (e) { return false; }
-      }
- 
-      /** Reloads a specific user's cached staff/replacement lists and force-renders the form fresh. */
-      function restoreCachedListsForUser(u) {
-        const raw = localStorage.getItem('cachedApp_' + userKey(u));
-        if (!raw) return false;
-        try {
-          const cached = JSON.parse(raw);
-          employees = cached.employees || [];
-          replacementPool = cached.replacementPool || { regions: [], allStaff: [] };
-          renderStaffList();
-          return employees.length > 0;
-        } catch (e) { return false; }
-      }
- 
-      // =====================================================================
- 
-      function login() {
-        const u = document.getElementById('user').value, p = document.getElementById('pass').value;
-        if(!u || !p) return showAlert("Fill credentials");
-        const btn = document.getElementById('loginBtn'); btn.disabled = true; btn.innerText = "Authenticating...";
- 
-        if (!navigator.onLine) {
-          btn.disabled = false; btn.innerText = "Log In";
-          const cached = getOfflineCredential(u);
-          if (cached && cached.pass === p.toLowerCase().trim()) {
-            userSession = cached.session;
-            registerState = {}; hasGroupPhoto = false; hasEndGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = [];
-            enterApp();
-            const hadStaff = restoreCachedListsForUser(u);
-            if (!hadStaff) document.getElementById('staffList').innerHTML = '<div class="loading-msg">No cached staff list for this user yet — log in online once to load it.</div>';
-            showToast("Offline Mode: using saved login");
-          } else {
-            showAlert("No internet connection, and no saved offline login found for this username/password on this device. Log in online at least once first.");
-          }
-          return;
-        }
- 
-        apiCall('login', { user: u, pass: p }).then((res) => {
-          btn.disabled = false; btn.innerText = "Log In";
-          if (res.status === "Success") {
-            userSession = res;
-            saveOfflineCredential(u, p, res); // enables offline login for this user going forward
-            enterApp();
-            loadData();
-          } else showAlert(res.message);
-        }).catch(() => {
-          btn.disabled = false; btn.innerText = "Log In";
-          // navigator.onLine said true but the request still failed — fall back to offline credentials too
-          const cached = getOfflineCredential(u);
-          if (cached && cached.pass === p.toLowerCase().trim()) {
-            userSession = cached.session;
-            registerState = {}; hasGroupPhoto = false; hasEndGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = [];
-            enterApp();
-            const hadStaff = restoreCachedListsForUser(u);
-            if (!hadStaff) document.getElementById('staffList').innerHTML = '<div class="loading-msg">No cached staff list for this user yet — log in online once to load it.</div>';
-            showToast("Offline Mode: using saved login");
-          } else {
-            showAlert("Could not reach the server, and no saved offline login found for this user.");
-          }
-        });
-      }
- 
-      function enterApp() {
-        document.getElementById('mainComp').innerText = userSession.comp;
-        document.getElementById('subRegionSite').innerText = `${userSession.reg} – ${userSession.site}`;
-        document.getElementById('loginView').classList.add('hidden');
-        document.getElementById('appView').classList.remove('hidden');
-        document.getElementById('regDate').valueAsDate = new Date();
-        updateConnBadge();
-        updateSyncBadge();
-      }
- 
-      function loadData() {
-        apiCall('getStaff', { comp: userSession.comp, reg: userSession.reg, site: userSession.site })
-          .then((data) => { employees = data; renderStaffList(); cacheSession(); })
-          .catch(() => restoreCachedListsForUser(userSession.user));
-        apiCall('getReplacementPool', {})
-          .then((pool) => { replacementPool = pool; cacheSession(); })
-          .catch(() => restoreCachedListsForUser(userSession.user));
-      }
- 
-      function renderStaffList() {
-        const list = document.getElementById('staffList');
-        if (employees.length === 0) { list.innerHTML = `<div class="loading-msg">No staff found.</div>`; return; }
-        list.innerHTML = "";
-        employees.forEach((emp, i) => {
-          if(!registerState[i]) registerState[i] = { status: "unmarked", absentReason: "", replacementRegion: "", replacement: "", lateDuration: "", lateReason: "", earlyTimeLeft: "", earlyReason: "" };
-          const s = registerState[i].status;
-          let statusTag = "";
-          if (s === 'Late') statusTag = '<span class="status-tag">Late '+registerState[i].lateDuration+'</span>';
-          else if (s === 'Left Early') statusTag = '<span class="status-tag" style="background:#F0FFF4; color:var(--present-green); border-color:var(--present-green);">Left Early '+registerState[i].earlyTimeLeft+'</span>';
-          let rowHtml = `
-            <div class="emp-row">
-              <div class="emp-flex">
-                <div>
-                  <div style="font-weight:700; font-size:14px; color:var(--navy);">${emp.name}${statusTag}</div>
-                  <div style="font-size:10px; color:var(--slate);">${emp.title}</div>
-                </div>
-                <div class="btn-group"><button class="btn-toggle ${s === 'Present' || s === 'Late' || s === 'Left Early' ? 'active-present' : ''}" onclick="setS(${i}, 'Present')">P</button><button class="btn-toggle ${s === 'Absent' ? 'active-absent' : ''}" onclick="setS(${i}, 'Absent')">A</button></div>
-              </div>`;
-          if (s === 'Absent') {
-            rowHtml += `
-              <div class="absence-box">
-                <label>Reason</label>
-                <select id="abs_reason_${i}" onchange="updateAbsData(${i})">
-                  <option value="">-- Choose Reason --</option>
-                  <option value="Sick">Sick Leave</option><option value="Family">Family Responsibility</option><option value="AWOL">AWOL</option><option value="Other">Other</option>
-                </select>
-                <label>Replacement Region</label>
-                <select class="replacement-select" id="rep_region_${i}" onchange="populateReplacements(${i})">
-                   <option value="">-- Select Region --</option>${replacementPool.regions.map(r => `<option value="${r}">${r}</option>`).join('')}
-                </select>
-                <label>Replacement Name</label>
-                <select class="replacement-select" id="replacement_${i}" onchange="updateAbsData(${i})"><option value="">-- Select Person --</option></select>
-              </div>`;
-          }
-          rowHtml += `</div>`; list.innerHTML += rowHtml;
- 
-          if(s === 'Absent') {
-            setTimeout(() => {
-              if(document.getElementById(`abs_reason_${i}`)) document.getElementById(`abs_reason_${i}`).value = registerState[i].absentReason;
-              if(document.getElementById(`rep_region_${i}`)) {
-                document.getElementById(`rep_region_${i}`).value = registerState[i].replacementRegion;
-                document.getElementById(`rep_region_${i}`).disabled = true; // Replacement region must match the absent employee's own region
-                if(registerState[i].replacementRegion) {
-                   populateReplacements(i, true);
-                   document.getElementById(`replacement_${i}`).value = registerState[i].replacement;
-                }
-              }
-            }, 0);
-          }
-        });
-        updateStats();
-      }
- 
-      function populateReplacements(i, isRestoring = false) {
-        const region = document.getElementById(`rep_region_${i}`).value;
-        if(!isRestoring) registerState[i].replacementRegion = region;
-        const repSelect = document.getElementById(`replacement_${i}`);
-        repSelect.innerHTML = '<option value="">-- Select Person --</option>';
-        replacementPool.allStaff.filter(s => s.region === region).forEach(s => { let opt = document.createElement('option'); opt.value = s.name; opt.text = s.name; repSelect.add(opt); });
-      }
- 
-      function setS(i, s) {
-        registerState[i].status = s;
-        registerState[i].earlyTimeLeft = ""; registerState[i].earlyReason = ""; // P/A toggle always overrides any earlier "Left Early" mark
-        if(s !== 'Absent') { registerState[i].replacement = ""; registerState[i].replacementRegion = ""; registerState[i].absentReason = ""; registerState[i].lateDuration = ""; registerState[i].lateReason = ""; }
-        else { registerState[i].replacementRegion = employees[i].reg || ""; } // Default replacement region to the employee's own region
-        renderStaffList();
-      }
- 
-      function updateAbsData(i) {
-        if(document.getElementById(`abs_reason_${i}`)) registerState[i].absentReason = document.getElementById(`abs_reason_${i}`).value;
-        if(document.getElementById(`replacement_${i}`)) registerState[i].replacement = document.getElementById(`replacement_${i}`).value;
-      }
- 
-      function updateStats() {
-        let p = 0, a = 0; Object.values(registerState).forEach(r => { if(r.status === 'Present' || r.status === 'Late' || r.status === 'Left Early') p++; if(r.status === 'Absent') a++; });
-        document.getElementById('cntP').innerText = p; document.getElementById('cntA').innerText = a;
-        document.getElementById('staffLabel').innerText = (p > 0) ? "GROUP PHOTO REQUIRED" : "GROUP PHOTO";
-      }
- 
-      function populateLateDropdown() {
-        const select = document.getElementById('lateEmpSelect'); select.innerHTML = '<option value="">-- Choose Employee --</option>';
-        employees.forEach((emp, i) => { if(registerState[i].status === 'Absent') { let op = document.createElement('option'); op.value = i; op.text = emp.name; select.appendChild(op); }});
-      }
- 
-      function updateLateCalc() {
-        const arrival = document.getElementById('arrivalTime').value; const shiftStart = document.getElementById('shift').value;
-        if(!arrival || !shiftStart) return; const getMins = (t) => { const [h, m] = t.split(':').map(Number); return (h*60)+m; };
-        let aMins = getMins(arrival); const sMins = getMins(shiftStart);
-        // Night shift crosses midnight — an arrival time like 00:15 is actually LATER than the
-        // shift start, not earlier, so push it past midnight before comparing. We now know this
-        // directly from the Shift Type selector rather than inferring it from an end time.
-        const isOvernightShift = document.getElementById('shiftType').value === 'Night';
-        if (isOvernightShift && aMins < sMins) aMins += 1440;
-        const cutoff = sMins + 30;
-        const sEl = document.getElementById('lateStatus'), dEl = document.getElementById('lateDuration');
-        if (aMins <= cutoff) { sEl.innerText = "ON TIME"; sEl.style.color = "var(--present-green)"; dEl.innerText = "0 Mins"; dEl.dataset.mins = 0; dEl.dataset.status = "Present"; }
-        else { const diff = aMins - cutoff; sEl.innerText = "LATE ARRIVAL"; sEl.style.color = "var(--absent-red)"; dEl.innerText = diff + " Mins"; dEl.dataset.mins = diff; dEl.dataset.status = "Late"; }
-      }
- 
-      function resetLateUI() { document.getElementById('arrivalTime').value = ""; document.getElementById('lateReason').value = ""; document.getElementById('lateStatus').innerText = ""; document.getElementById('lateDuration').innerText = ""; }
-
-      /** Keeps the hidden #shift field in sync with the Start Shift time input, so all
-       *  existing shift-parsing logic (late calc, payloads, etc.) keeps working unchanged.
-       *  End Shift is no longer collected here — it's filled in later via the separate
-       *  "End Shift" tab at the end of the day. */
-      function updateShiftValue() {
-        document.getElementById('shift').value = document.getElementById('shiftStartTime').value || "";
-        resetLateUI();
-      }
- 
-      function submitLate() {
-        if (lateSubmitLock) return; // guard against rapid double-taps firing two separate submissions
-        const idx = document.getElementById('lateEmpSelect').value; const durData = document.getElementById('lateDuration').dataset; if(!idx || !durData.status) return showAlert("Select staff and time.");
- 
-        lateSubmitLock = true;
-        const btn = document.getElementById('lateSubmitBtn'); btn.disabled = true;
- 
-        registerState[idx].status = durData.status;
-        registerState[idx].lateDuration = durData.mins + " mins";
-        registerState[idx].lateReason = document.getElementById('lateReason').value || "Grace Period";
-        registerState[idx].replacement = "";
-        registerState[idx].replacementRegion = "";
-        registerState[idx].absentReason = "";
- 
-        const submissionId = generateId(); // reused across any automatic retries of THIS click only
-        const payload = { submissionId, idx: idx, date: document.getElementById('regDate').value, empName: employees[idx].name, arrivalTime: document.getElementById('arrivalTime').value, shiftStart: document.getElementById('shift').value.split('-')[0], shiftType: document.getElementById('shiftType').value, status: durData.status, duration: durData.mins, reason: document.getElementById('lateReason').value || "Grace Period", loggedUser: userSession.user, signOffName: document.getElementById('signOffName').value, site: userSession.site, comp: userSession.comp, reg: userSession.reg };
- 
-        // FIX: queue key is per-employee only (no Date.now()) so resubmitting for the same
-        // employee while still offline OVERWRITES the pending item instead of creating a
-        // second duplicate queued entry for them.
-        const queueId = `late_${idx}`;
-        apiCallOrQueue('commit', { payload, isLateEntry: true, skipEmail: true }, queueId, 'late', () => {
-          showToast("Sync Successful");
-        }).then((outcome) => {
-          lateRecordsLog.push(payload);
-          // FIX: always release the lock/button, even when queued offline — previously this
-          // stayed disabled until a real sync happened, which is impossible while offline,
-          // so a second late entry (or a correction to this one) could never be submitted.
-          btn.disabled = false;
-          lateSubmitLock = false;
-          if (outcome.queued) { showToast("No connection – saved offline. Will send automatically. You can keep logging more."); }
-          renderLateLog(); resetLateUI(); populateLateDropdown(); renderStaffList();
-        });
-      }
- 
-      function renderLateLog() {
-        const container = document.getElementById('lateLogContainer'); const body = document.getElementById('lateLogBody'); container.classList.remove('hidden'); body.innerHTML = "";
-        lateRecordsLog.forEach((rec, idx) => { body.innerHTML += `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${rec.empName}</td><td style="text-align:center;">${rec.duration}m</td><td style="text-align:center;"><button class="btn-reset" onclick="resetLateRecord(${idx})">Reset</button></td></tr>`; });
-      }
- 
-      function resetLateRecord(logIdx) {
-        const record = lateRecordsLog[logIdx];
-        registerState[record.idx].status = 'Absent';
-        registerState[record.idx].lateDuration = "";
-        registerState[record.idx].lateReason = "";
-        registerState[record.idx].replacement = "";
-        registerState[record.idx].replacementRegion = "";
-        lateRecordsLog.splice(logIdx, 1);
-        renderLateLog(); renderStaffList(); populateLateDropdown();
-      }
- 
-      // =====================================================================
-      // LEFT EARLY — for staff who were Present/Late but had to leave the
-      // shift early (e.g. sent to another site). Mirrors the Lateness tab.
-      // =====================================================================
-      function populateEarlyDropdown() {
-        const select = document.getElementById('earlyEmpSelect'); select.innerHTML = '<option value="">-- Choose Employee --</option>';
-        employees.forEach((emp, i) => { if(registerState[i].status === 'Present' || registerState[i].status === 'Late') { let op = document.createElement('option'); op.value = i; op.text = emp.name; select.appendChild(op); }});
-      }
-
-      function resetEarlyUI() { document.getElementById('earlyTimeLeft').value = ""; document.getElementById('earlyReason').value = ""; }
-
-      function submitEarly() {
-        if (earlySubmitLock) return; // guard against rapid double-taps firing two separate submissions
-        const idx = document.getElementById('earlyEmpSelect').value;
-        const timeLeft = document.getElementById('earlyTimeLeft').value;
-        const reason = document.getElementById('earlyReason').value;
-        if(!idx || !timeLeft) return showAlert("Select staff and the time they left.");
-        if(!reason) return showAlert("A reason is required.");
-
-        earlySubmitLock = true;
-        const btn = document.getElementById('earlySubmitBtn'); btn.disabled = true;
-
-        registerState[idx].status = 'Left Early';
-        registerState[idx].earlyTimeLeft = timeLeft;
-        registerState[idx].earlyReason = reason;
-        registerState[idx].replacement = "";
-        registerState[idx].replacementRegion = "";
-        registerState[idx].absentReason = "";
-        registerState[idx].lateDuration = "";
-
-        const submissionId = generateId(); // reused across any automatic retries of THIS click only
-        const payload = { submissionId, idx: idx, date: document.getElementById('regDate').value, empName: employees[idx].name, timeLeft: timeLeft, reason: reason, shiftType: document.getElementById('shiftType').value, loggedUser: userSession.user, signOffName: document.getElementById('signOffName').value, site: userSession.site, comp: userSession.comp, reg: userSession.reg };
-
-        // Queue key is per-employee only, so resubmitting for the same employee while
-        // still offline OVERWRITES the pending item instead of creating a duplicate,
-        // matching the same fix applied to the Lateness tab.
-        const queueId = `early_${idx}`;
-        apiCallOrQueue('commit', { payload, isEarlyEntry: true, skipEmail: true }, queueId, 'early', () => {
-          showToast("Sync Successful");
-        }).then((outcome) => {
-          earlyRecordsLog.push(payload);
-          btn.disabled = false;
-          earlySubmitLock = false;
-          if (outcome.queued) { showToast("No connection – saved offline. Will send automatically. You can keep logging more."); }
-          renderEarlyLog(); resetEarlyUI(); populateEarlyDropdown(); renderStaffList();
-        });
-      }
-
-      function renderEarlyLog() {
-        const container = document.getElementById('earlyLogContainer'); const body = document.getElementById('earlyLogBody'); container.classList.remove('hidden'); body.innerHTML = "";
-        earlyRecordsLog.forEach((rec, idx) => { body.innerHTML += `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${rec.empName}</td><td style="text-align:center;">${rec.timeLeft}</td><td style="text-align:center;"><button class="btn-reset" onclick="resetEarlyRecord(${idx})">Reset</button></td></tr>`; });
-      }
-
-      function resetEarlyRecord(logIdx) {
-        const record = earlyRecordsLog[logIdx];
-        registerState[record.idx].status = 'Present';
-        registerState[record.idx].earlyTimeLeft = "";
-        registerState[record.idx].earlyReason = "";
-        earlyRecordsLog.splice(logIdx, 1);
-        renderEarlyLog(); renderStaffList(); populateEarlyDropdown();
-      }
-
-      // =====================================================================
-      // END SHIFT — filled in at the end of the day to close out the shift
-      // that was started on the Attendance tab. Matched server-side by
-      // date + site + company (not a client-remembered row number), so this
-      // works even if the app was reloaded or re-logged-in since the morning.
-      // =====================================================================
-      function submitEndShift() {
-        if (endShiftSubmitLock) return; // guard against rapid double-taps firing two separate submissions
-        const endTime = document.getElementById('shiftEndTime').value;
-        const date = document.getElementById('regDate').value;
-        if (!date) return showAlert("Set the Date on the Attendance tab first.");
-        if (!endTime) return showAlert("Enter the End Shift time.");
-        if (!document.getElementById('endSupData').value) return showAlert("Supervisor photo required.");
-        if (!hasEndGroupPhoto) return showAlert("Group photo required.");
-
-        endShiftSubmitLock = true;
-        const btn = document.getElementById('endShiftSubmitBtn'); btn.disabled = true; btn.innerText = "Syncing...";
-
-        const submissionId = generateId(); // reused across any automatic retries of THIS click only
-        const payload = { submissionId, date: date, endTime: endTime, site: userSession.site, comp: userSession.comp, reg: userSession.reg, endSupPhoto: document.getElementById('endSupData').value, endStaffPhoto: document.getElementById('endStaffData').value };
-
-        // Queue key is per-date so resubmitting for the same day while still offline
-        // overwrites the pending item instead of creating a duplicate.
-        const queueId = `endshift_${date}`;
-        apiCallOrQueue('endShift', { payload }, queueId, 'endshift', (res) => {
-          if (res && res.status === "Success") {
-            if (res.duplicate) { showToast("End Shift already recorded — summary was already sent."); }
-            else { showToast(`End Shift recorded — ${res.presentCount} present, ${res.notPresentCount} not present. Summary emailed.`); }
-          }
-          else if (res) { showAlert(res.message); }
-        }).then((outcome) => {
-          btn.disabled = false;
-          endShiftSubmitLock = false;
-          if (outcome.queued) {
-            btn.innerText = "Resubmit End Shift (Queued Offline)";
-            showToast("No connection – saved offline. Will send automatically.");
-          } else {
-            btn.innerText = "Submit End Shift";
-          }
-        });
-      }
-
-      function overlayStamp(img, canvas, callback) {
-        const ctx = canvas.getContext('2d'); canvas.width = 400; canvas.height = 300; ctx.drawImage(img, 0, 0, 400, 300); ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; ctx.fillRect(0, 260, 400, 40); ctx.fillStyle = "white"; ctx.font = "11px Inter, Arial"; const ts = new Date().toLocaleString(); ctx.fillText(`${currentLocation} | ${ts}`, 10, 285); callback(canvas.toDataURL('image/jpeg', 0.4));
-      }
-      /* Photos must be taken on the spot, not picked out of the gallery. `capture` only
-       * asks the OS for the camera — it is ignored entirely on desktop — so we also reject
-       * any file that wasn't created in the last few minutes. A file with no lastModified
-       * is allowed through rather than blocking a camera source that doesn't set it. */
-      const MAX_PHOTO_AGE_MS = 5 * 60 * 1000;
-      function isFreshCapture(file) { return !file.lastModified || (Date.now() - file.lastModified) <= MAX_PHOTO_AGE_MS; }
-
-      async function handleFile(input, prevId, dataId, labelId, onStored) {
-        const file = input.files[0]; if (!file) return;
-        if (!isFreshCapture(file)) { input.value = ""; return showAlert("This photo must be taken now, with the camera. A saved or downloaded image can't be used."); }
-        // Fresh fix for THIS photo, before stamping. overlayStamp still reads the
-        // currentLocation global, so set it here rather than changing that function.
-        const fix = await geolocatePromise();
-        photoMeta[dataId] = { lat: fix ? fix.lat : null, lng: fix ? fix.lng : null, capturedAt: new Date().toISOString() };
-        currentLocation = fix ? `${fix.lat.toFixed(4)}, ${fix.lng.toFixed(4)}` : "Location: Unavailable";
-        const reader = new FileReader();
-        reader.onload = (e) => { const img = new Image(); img.onload = () => { overlayStamp(img, document.getElementById('canvas'), (stampedData) => { document.getElementById(prevId).src = stampedData; document.getElementById(prevId).classList.remove('hidden'); document.getElementById(dataId).value = stampedData; if (labelId) document.getElementById(labelId).classList.add('hidden'); if (onStored) onStored(); }); }; img.src = e.target.result; }; reader.readAsDataURL(file);
-      }
-      function handleStaffFiles(input) { handleFile(input, 'staffPrev', 'staffData', 'staffLabel', () => { hasGroupPhoto = true; }); }
-      function handleEndStaffFiles(input) { handleFile(input, 'endStaffPrev', 'endStaffData', 'endStaffLabel', () => { hasEndGroupPhoto = true; }); }
- 
-      function submitRegister() {
-        if (registerSubmitLock) return; // guard against rapid double-taps firing two separate submissions
-        const pCount = parseInt(document.getElementById('cntP').innerText); const signOff = document.getElementById('signOffName').value;
-        if (!document.getElementById('shiftStartTime').value) return showAlert("Start Shift is required.");
-        if (pCount > 0 && !hasGroupPhoto) return showAlert("Group photo required.");
-        if (!signOff) return showAlert("Sign off name required.");
-        const final = employees.map((e, i) => ({ name: e.name, status: registerState[i].status, absentReason: registerState[i].absentReason, replacement: registerState[i].replacement, lateDuration: registerState[i].lateDuration, lateReason: registerState[i].lateReason, earlyTimeLeft: registerState[i].earlyTimeLeft, earlyReason: registerState[i].earlyReason }));
-        if(final.some(r => r.status === 'unmarked')) return showAlert("Mark all staff.");
-        if(final.some(r => r.status === 'Absent' && (!r.absentReason || !r.replacement))) return showAlert("Absent staff require Reason AND Replacement.");
-
-        registerSubmitLock = true;
-        const btn = document.getElementById('regSubmitBtn'); btn.disabled = true; btn.innerText = "Syncing...";
-        const submissionId = generateId(); // reused across any automatic retries of THIS click only — a fresh click for "Update & Resend" gets a new id, so it correctly sends again
-        const supMeta = photoMetaFor('supData'), staffMeta = photoMetaFor('staffData');
-        const payload = { ...userSession, submissionId, date: document.getElementById('regDate').value, shift: document.getElementById('shift').value, shiftType: document.getElementById('shiftType').value, records: final, supPhoto: document.getElementById('supData').value, staffPhoto: document.getElementById('staffData').value, staffPhotoCount: 1, signOffName: signOff, loggedUser: userSession.user, editFirstRow: sessionFirstRow, supPhotoLat: supMeta.lat, supPhotoLng: supMeta.lng, supPhotoCaptureTime: supMeta.capturedAt, staffPhotoLat: staffMeta.lat, staffPhotoLng: staffMeta.lng, staffPhotoCaptureTime: staffMeta.capturedAt };
- 
-        apiCallOrQueue('commit', { payload, isLateEntry: false, skipEmail: false }, 'register_pending', 'register', (res) => {
-          if (res && res.status === "Success") { sessionFirstRow = res.firstRow; showToast("Report Sent!"); }
-          else if (res) { showAlert(res.message); }
-        }).then((outcome) => {
-          // FIX: the button used to stay permanently disabled ("Queued – will send when
-          // online") until a real sync succeeded — impossible while offline — so there was
-          // no way to edit and resubmit. It's now re-enabled right away in both cases.
-          // Since the queue key ('register_pending') is fixed, resubmitting while still
-          // offline safely OVERWRITES the pending item with the corrected data rather than
-          // queuing a duplicate.
-          btn.disabled = false;
-          registerSubmitLock = false;
-          if (outcome.queued) {
-            btn.innerText = "Resubmit Register (Queued Offline)";
-            showToast("No connection – saved offline. You can edit and resubmit; only the latest version will be sent.");
-          } else if (outcome.result && outcome.result.status === "Success") {
-            btn.innerText = "Update & Resend Email";
-          } else {
-            btn.innerText = "Submit Register";
-          }
-        });
-      }
- 
-      // =====================================================================
-      // STARTUP
-      // =====================================================================
-      window.addEventListener('load', () => {
-        fetchLocation();
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('./sw.js').catch(() => {});
-        }
-        updateConnBadge();
-        if (!tryOfflineRestore()) {
-          // normal online login flow — nothing else to do here
-        }
-        updateSyncBadge();
-        flushQueue();
-      });
     </script>
-    <div id="dataStore" class="hidden"><input type="hidden" id="staffData"></div>
   </body>
 </html>

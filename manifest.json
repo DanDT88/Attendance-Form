@@ -1,7 +1,7 @@
 {
   "name": "Corporate Attendance Portal",
   "short_name": "Attendance",
-  "start_url": "./index.html",
+  "start_url": "./attendance.html",
   "display": "standalone",
   "background_color": "#F0F2F5",
   "theme_color": "#1B365D",
