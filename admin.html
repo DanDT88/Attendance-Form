@@ -297,7 +297,34 @@
         document.getElementById('adminPass').value = "";
         document.getElementById('appView').classList.add('hidden');
         document.getElementById('loginView').classList.remove('hidden');
-        showToast("Logged out.");
+        // Back to the shared front door rather than this page's own form.
+        location.href = './index.html';
+      }
+
+      /**
+       * Picks up a session already authenticated on the shared login page.
+       * Read once and removed, so a reload falls back to this page's own login
+       * form rather than resurrecting a stale session.
+       */
+      function consumeHandoff() {
+        let raw = null;
+        try {
+          raw = sessionStorage.getItem('pendingSession');
+          sessionStorage.removeItem('pendingSession');
+        } catch (e) { return false; }
+        if (!raw) return false;
+        try {
+          const handoff = JSON.parse(raw);
+          if (!handoff || handoff.role !== 'admin' || !handoff.session) return false;
+          adminSession = handoff.session;
+          document.getElementById('adminName').innerText = handoff.session.name || handoff.session.user;
+          document.getElementById('loginView').classList.add('hidden');
+          document.getElementById('appView').classList.remove('hidden');
+          initDefaults();
+          loadFilterData();
+          loadToday();
+          return true;
+        } catch (e) { return false; }
       }
 
       function initDefaults() {
@@ -807,6 +834,9 @@
       // =====================================================================
       window.addEventListener('load', () => {
         initDefaults();
+        // A session from the shared login page, if there is one. Otherwise this
+        // page's own login form handles anyone who deep-links straight here.
+        consumeHandoff();
         if (!navigator.onLine) document.getElementById('loginConnNote').classList.remove('hidden');
         window.addEventListener('online', () => document.getElementById('loginConnNote').classList.add('hidden'));
         window.addEventListener('offline', () => document.getElementById('loginConnNote').classList.remove('hidden'));

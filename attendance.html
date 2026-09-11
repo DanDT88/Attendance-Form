@@ -298,7 +298,9 @@
         document.getElementById('shiftStartTime').value = ""; document.getElementById('shiftEndTime').value = ""; document.getElementById('shift').value = ""; document.getElementById('shiftType').value = "Day";
         document.getElementById('endShiftSubmitBtn').innerText = "Submit End Shift"; document.getElementById('endShiftSubmitBtn').disabled = false;
         document.getElementById('regSubmitBtn').innerText = "Submit Register";
-        showToast("Logged out.");
+        // Back to the shared front door rather than this page's own form, so
+        // logging out always lands somewhere either kind of user can log in.
+        location.href = './index.html';
       }
  
       function switchTab(tab) {
@@ -511,6 +513,50 @@
         } catch (e) { return null; }
       }
  
+      /**
+       * Picks up a session already authenticated on the shared login page
+       * (index.html). Read once and removed immediately, so a reload falls
+       * through to the normal paths rather than resurrecting a stale session.
+       */
+      function consumeHandoff() {
+        let raw = null;
+        try {
+          raw = sessionStorage.getItem('pendingSession');
+          sessionStorage.removeItem('pendingSession');
+        } catch (e) { return false; }
+        if (!raw) return false;
+        try {
+          const handoff = JSON.parse(raw);
+          if (!handoff || handoff.role !== 'supervisor' || !handoff.session) return false;
+          userSession = handoff.session;
+          enterApp();
+          loadData();
+          return true;
+        } catch (e) { return false; }
+      }
+
+      /**
+       * The login page forwards raw credentials here when the device is offline,
+       * because the offline-credential path lives in this file. Fill the form and
+       * run the normal login(), so there is exactly one implementation of it.
+       */
+      function consumePendingLogin() {
+        let raw = null;
+        try {
+          raw = sessionStorage.getItem('pendingLogin');
+          sessionStorage.removeItem('pendingLogin');
+        } catch (e) { return false; }
+        if (!raw) return false;
+        try {
+          const creds = JSON.parse(raw);
+          if (!creds || !creds.user) return false;
+          document.getElementById('user').value = creds.user;
+          document.getElementById('pass').value = creds.pass || "";
+          login();
+          return true;
+        } catch (e) { return false; }
+      }
+
       function tryOfflineRestore() {
         if (navigator.onLine) return false;
         const lastUser = localStorage.getItem('lastActiveUser');
@@ -949,8 +995,12 @@
           navigator.serviceWorker.register('./sw.js').catch(() => {});
         }
         updateConnBadge();
-        if (!tryOfflineRestore()) {
-          // normal online login flow — nothing else to do here
+        // In order: a session handed over by the login page, then credentials
+        // forwarded from it while offline, then the auto-resume of the last
+        // session. If none apply, this page's own login form is the fallback —
+        // it still works for anyone who deep-links straight here.
+        if (!consumeHandoff() && !consumePendingLogin() && !tryOfflineRestore()) {
+          // normal login flow — nothing else to do here
         }
         updateSyncBadge();
         flushQueue();

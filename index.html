@@ -9,101 +9,173 @@
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
       /* Same tokens as attendance.html and admin.html — one product, one look. */
-      :root { --navy: #1B365D; --slate: #4A5568; --bg: #F0F2F5; --border: #E2E8F0; --present-green: #38A169; --white: #FFFFFF; }
+      :root { --navy: #1B365D; --slate: #4A5568; --bg: #F0F2F5; --border: #E2E8F0; --absent-red: #E53E3E; --late-orange: #DD6B20; --white: #FFFFFF; }
       body { font-family: 'Inter', sans-serif; background-color: var(--bg); margin: 0; padding: 12px; color: var(--slate); line-height: 1.5; -webkit-tap-highlight-color: transparent; }
-      .container { width: 100%; max-width: 520px; margin: 0 auto; padding-block: 24px; }
-      .masthead { text-align: center; margin-bottom: 28px; }
-      h1 { font-size: 22px; color: var(--navy); margin: 0; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; }
-      h2 { font-size: 14px; color: var(--slate); margin: 6px 0 0; font-weight: 500; opacity: 0.8; }
-
-      /* Each choice is a .card the whole surface of which is the tap target —
-         these get used on phones in the field, so nothing small to aim at. */
-      .choice {
-        display: block; text-decoration: none; background: var(--white); padding: 24px;
-        border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-        border-top: 8px solid var(--navy); margin-bottom: 20px; color: inherit;
-        transition: transform 0.12s ease, box-shadow 0.12s ease;
-      }
-      .choice:hover, .choice:focus-visible { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(0,0,0,0.12); outline: none; }
-      .choice:focus-visible { border-top-color: var(--present-green); }
-      .choice-admin { border-top-color: var(--slate); }
-      .choice-head { display: flex; align-items: center; gap: 14px; }
-      .choice-icon { flex: 0 0 46px; height: 46px; border-radius: 12px; background: #F1F5F9; display: flex; align-items: center; justify-content: center; }
-      .choice-icon svg { width: 24px; height: 24px; stroke: var(--navy); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-      .choice-admin .choice-icon svg { stroke: var(--slate); }
-      .choice-title { font-size: 17px; font-weight: 700; color: var(--navy); }
-      .choice-admin .choice-title { color: var(--slate); }
-      .choice-sub { font-size: 12px; font-weight: 500; margin-top: 2px; }
-      .choice-body { font-size: 13px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #EEE; }
-      .choice-go { display: inline-block; margin-top: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--navy); }
-      .choice-admin .choice-go { color: var(--slate); }
-
-      .footnote { text-align: center; font-size: 11px; color: #94A3B8; margin-top: 8px; }
-      .badge-offline { text-align: center; font-size: 11px; font-weight: 700; border-radius: 8px; padding: 8px; margin-bottom: 18px; color: #E53E3E; background: #FDECEC; border: 1px solid #E53E3E; }
+      .container { width: 100%; max-width: 500px; margin: 0 auto; padding-block: 24px; }
+      .card { background: var(--white); padding: 24px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); border-top: 8px solid var(--navy); margin-bottom: 24px; }
+      h1 { font-size: 22px; color: var(--navy); text-align: center; margin: 0; text-transform: uppercase; font-weight: 800; }
+      h2 { font-size: 14px; color: var(--slate); text-align: center; margin: 6px 0 16px; font-weight: 500; opacity: 0.8; }
+      label { display: block; font-weight: 700; margin-top: 14px; font-size: 10px; color: var(--navy); text-transform: uppercase; }
+      input { width: 100%; padding: 12px; margin-top: 6px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; box-sizing: border-box; outline: none; background: #F8FAFC; font-family: inherit; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .btn-main { width: 100%; padding: 16px; background: var(--navy); color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 24px; text-transform: uppercase; font-size: 14px; box-shadow: 0 4px 12px rgba(27,54,93,0.2); }
+      .badge { text-align: center; font-size: 11px; font-weight: 700; border-radius: 8px; padding: 8px; margin-bottom: 14px; }
+      .badge-offline { color: var(--absent-red); background: #FDECEC; border: 1px solid var(--absent-red); }
+      .footnote { text-align: center; font-size: 11px; color: #94A3B8; margin-top: 16px; }
       .hidden { display: none; }
-      @media (max-width: 380px) { .choice { padding: 20px; } h1 { font-size: 19px; } }
+      .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(27,54,93,0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 4000; }
+      .modal-overlay.show { display: flex; }
+      .modal-box { background: var(--white); width: 100%; max-width: 360px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.20); border-top: 8px solid var(--navy); box-sizing: border-box; text-align: center; }
+      .modal-msg { font-size: 14px; font-weight: 500; color: var(--slate); white-space: pre-wrap; }
+      .modal-box .btn-main { margin-top: 20px; }
     </style>
   </head>
   <body>
-    <div class="container">
 
-      <div class="masthead">
-        <h1>Delta Attendance</h1>
-        <h2>Corporate Management System</h2>
+    <div id="alertModal" class="modal-overlay">
+      <div class="modal-box" role="alertdialog" aria-modal="true" aria-describedby="alertModalMsg">
+        <div id="alertModalMsg" class="modal-msg"></div>
+        <button type="button" class="btn-main" id="alertModalOk" onclick="closeAlert()">OK</button>
       </div>
-
-      <div id="offlineNote" class="badge-offline hidden">
-        No internet connection. Attendance still works offline; the dashboard needs connectivity.
-      </div>
-
-      <a class="choice" href="./attendance.html">
-        <div class="choice-head">
-          <span class="choice-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          </span>
-          <span>
-            <div class="choice-title">Attendance</div>
-            <div class="choice-sub">Site supervisors</div>
-          </span>
-        </div>
-        <div class="choice-body">
-          Mark the daily register, log lateness and early departures, capture verification photos and close out the shift.
-          <div class="choice-go">Open attendance &rsaquo;</div>
-        </div>
-      </a>
-
-      <a class="choice choice-admin" href="./admin.html">
-        <div class="choice-head">
-          <span class="choice-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
-          </span>
-          <span>
-            <div class="choice-title">Admin Dashboard</div>
-            <div class="choice-sub">Head office</div>
-          </span>
-        </div>
-        <div class="choice-body">
-          Today's overview across sites, reports and trends, the staff directory, and compliance review of photo location and timing.
-          <div class="choice-go">Open dashboard &rsaquo;</div>
-        </div>
-      </a>
-
-      <p class="footnote">Separate logins — supervisor credentials do not open the dashboard.</p>
     </div>
 
-    <script>
-      // The attendance app works offline; the dashboard does not. Say so up front
-      // rather than letting someone tap through to a page that can't load.
-      (function () {
-        const note = document.getElementById('offlineNote');
-        const sync = () => note.classList.toggle('hidden', navigator.onLine);
-        sync();
-        window.addEventListener('online', sync);
-        window.addEventListener('offline', sync);
-      })();
+    <div class="container">
+      <div class="card">
+        <h1>Delta Attendance</h1>
+        <h2>Corporate Management System</h2>
 
-      // Registered here too so the landing page itself is available offline —
-      // same scope and same worker the attendance app uses.
+        <div id="offlineNote" class="badge badge-offline hidden">
+          No internet connection. Attendance works offline if you have logged in on this device before; the dashboard needs connectivity.
+        </div>
+
+        <form id="loginForm" autocomplete="on">
+          <label for="user">Username</label>
+          <input type="text" id="user" placeholder="Your username" autocomplete="username" autocapitalize="none" autocorrect="off">
+          <label for="pass">Password</label>
+          <input type="password" id="pass" placeholder="••••••••" autocomplete="current-password">
+          <button class="btn-main" id="loginBtn" type="submit">Log In</button>
+        </form>
+
+        <p class="footnote">You'll be taken to the right place automatically.</p>
+      </div>
+    </div>
+
+    <script src="./config.js"></script>
+    <script>
+      /**
+       * Shared front door. One login for both apps: the backend's `authenticate`
+       * action says whether these are supervisor or head-office credentials, and
+       * this page forwards to attendance.html or admin.html accordingly.
+       *
+       * The session is handed over in sessionStorage rather than the URL, so
+       * credentials never reach browser history, referrers or server logs.
+       *
+       * IMPORTANT: the role decides which page opens. It is not a security
+       * boundary — the Apps Script endpoints are unauthenticated, so anyone can
+       * still open admin.html directly or call the API without logging in.
+       */
+      const HANDOFF_KEY = 'pendingSession';
+      const PENDING_LOGIN_KEY = 'pendingLogin';
+
+      function showAlert(msg) {
+        document.getElementById('alertModalMsg').innerText = msg;
+        document.getElementById('alertModal').classList.add('show');
+        document.getElementById('alertModalOk').focus();
+      }
+      function closeAlert() { document.getElementById('alertModal').classList.remove('show'); }
+
+      function apiCall(action, data = {}) {
+        return new Promise((resolve, reject) => {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 55000);
+          fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action, ...data }),
+            signal: controller.signal
+          })
+            .then((res) => res.json())
+            .then((json) => { clearTimeout(timeout); resolve(json); })
+            .catch((err) => { clearTimeout(timeout); reject(err); });
+        });
+      }
+
+      /**
+       * Mirrors saveOfflineCredential in attendance.html — same 'savedCredentials'
+       * shape and the same lowercasing — so a supervisor who logs in here can
+       * still log in on this device later with no signal. Kept in sync with that
+       * function; the format is the contract between the two pages.
+       */
+      function saveOfflineCredential(u, p, session) {
+        try {
+          const all = JSON.parse(localStorage.getItem('savedCredentials') || '{}');
+          all[u.toLowerCase().trim()] = { pass: p.toLowerCase().trim(), session };
+          localStorage.setItem('savedCredentials', JSON.stringify(all));
+        } catch (e) {}
+      }
+
+      function go(page, payload) {
+        try { sessionStorage.setItem(HANDOFF_KEY, JSON.stringify(payload)); } catch (e) {}
+        location.href = page;
+      }
+
+      function setBusy(busy) {
+        const btn = document.getElementById('loginBtn');
+        btn.disabled = busy;
+        btn.innerText = busy ? 'Authenticating...' : 'Log In';
+      }
+
+      function doLogin() {
+        const u = document.getElementById('user').value;
+        const p = document.getElementById('pass').value;
+        if (!u || !p) return showAlert("Fill credentials");
+
+        // Offline: don't try to authenticate at all. Hand the credentials to
+        // attendance.html and let its existing offline-credential path run —
+        // that machinery is what supervisors rely on in the field, and
+        // duplicating it here would be a second copy to keep correct.
+        // The dashboard has no offline mode, so there is nothing to route to.
+        if (!navigator.onLine) {
+          try { sessionStorage.setItem(PENDING_LOGIN_KEY, JSON.stringify({ user: u, pass: p })); } catch (e) {}
+          location.href = './attendance.html';
+          return;
+        }
+
+        setBusy(true);
+        apiCall('authenticate', { user: u, pass: p }).then((res) => {
+          setBusy(false);
+          if (!res || res.status !== "Success") {
+            return showAlert((res && res.message) || "Invalid credentials.");
+          }
+          if (res.role === 'admin') {
+            go('./admin.html', { role: 'admin', session: res });
+          } else {
+            // Saved here rather than passed onward, so the password doesn't
+            // travel through the handoff.
+            saveOfflineCredential(u, p, res);
+            go('./attendance.html', { role: 'supervisor', session: res });
+          }
+        }).catch(() => {
+          setBusy(false);
+          // Reached only when the network failed despite navigator.onLine
+          // claiming otherwise — common on flaky mobile data. Fall through to
+          // the offline path rather than dead-ending.
+          try { sessionStorage.setItem(PENDING_LOGIN_KEY, JSON.stringify({ user: u, pass: p })); } catch (e) {}
+          location.href = './attendance.html';
+        });
+      }
+
+      document.getElementById('loginForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        doLogin();
+      });
+
+      const offlineNote = document.getElementById('offlineNote');
+      const syncOffline = () => offlineNote.classList.toggle('hidden', navigator.onLine);
+      syncOffline();
+      window.addEventListener('online', syncOffline);
+      window.addEventListener('offline', syncOffline);
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
       }

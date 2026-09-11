@@ -79,6 +79,11 @@ function doPost(e) {
         result = portal_commitEndShift(req.payload);
         break;
 
+      // Shared login page (index.html) — resolves which app to open.
+      case 'authenticate':
+        result = portal_authenticate(req.user, req.pass);
+        break;
+
       // --- Admin dashboard (admin.html) ---
       case 'adminLogin':
         result = portal_verifyAdmin(req.user, req.pass);
@@ -362,6 +367,37 @@ function portal_verifyAdmin(u, p) {
     if (storedUser && storedUser === inputUser && storedPass === inputPass) {
       return { status: "Success", user: data[i][0], name: data[i][2] || data[i][0] };
     }
+  }
+  return { status: "Error", message: "Invalid credentials." };
+}
+
+/**
+ * Single front-door login for the shared login page: works out which kind of
+ * account this is and tells the client where to send them.
+ *
+ * AdminUsers is checked first, so if the same username somehow exists in both
+ * sheets the admin record wins — a deliberate, documented tie-break rather
+ * than whichever sheet happens to be read first.
+ *
+ * This only delegates to the two existing verify functions; it does not
+ * reimplement credential matching, so supervisor login behaviour is identical
+ * whether it arrives here or through the 'login' action.
+ *
+ * NOTE: the role returned here decides which PAGE opens. It is not an
+ * authorisation boundary — every action in this file is still an
+ * unauthenticated POST, so a supervisor routed to the attendance app can
+ * still call any admin action directly.
+ */
+function portal_authenticate(u, p) {
+  const admin = portal_verifyAdmin(u, p);
+  if (admin && admin.status === "Success") {
+    admin.role = "admin";
+    return admin;
+  }
+  const supervisor = portal_verifyUser(u, p);
+  if (supervisor && supervisor.status === "Success") {
+    supervisor.role = "supervisor";
+    return supervisor;
   }
   return { status: "Error", message: "Invalid credentials." };
 }
