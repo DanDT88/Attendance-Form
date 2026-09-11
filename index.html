@@ -39,6 +39,11 @@
       .upload-box img { width: 100%; max-height: 140px; object-fit: cover; border-radius: 8px; margin-top: 8px; border: 1px solid #E2E8F0; }
       .btn-main { width: 100%; padding: 16px; background: var(--navy); color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 24px; text-transform: uppercase; font-size: 14px; box-shadow: 0 4px 12px rgba(27,54,93,0.2); }
       .toast { position: fixed; bottom: 30px; left: 20px; right: 20px; background: #333; color: white; padding: 14px; border-radius: 10px; text-align: center; font-size: 14px; font-weight: 600; display: none; z-index: 3000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+      .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(27,54,93,0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 4000; }
+      .modal-overlay.show { display: flex; }
+      .modal-box { background: var(--white); width: 100%; max-width: 360px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.20); border-top: 8px solid var(--navy); box-sizing: border-box; text-align: center; }
+      .modal-msg { font-size: 14px; font-weight: 500; color: var(--slate); white-space: pre-wrap; }
+      .modal-box .btn-main { margin-top: 20px; }
       .hidden { display: none; }
       .loading-msg { text-align: center; padding: 30px; font-size: 14px; font-weight: 600; color: var(--navy); }
       .badge { text-align: center; font-size: 11px; font-weight: 700; border-radius: 8px; padding: 8px; margin-bottom: 14px; }
@@ -50,6 +55,13 @@
  
     <div id="toast" class="toast">Action Successful</div>
  
+    <div id="alertModal" class="modal-overlay">
+      <div class="modal-box" role="alertdialog" aria-modal="true" aria-describedby="alertModalMsg">
+        <div id="alertModalMsg" class="modal-msg"></div>
+        <button type="button" class="btn-main" id="alertModalOk" onclick="closeAlert()">OK</button>
+      </div>
+    </div>
+
     <div class="container">
       <!-- LOGIN -->
       <div id="loginView" class="card">
@@ -209,6 +221,18 @@
  
       function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.display = 'block'; setTimeout(() => { t.style.display = 'none'; }, 4000); }
  
+      // In-app stand-in for native alert(): HtmlService renders alert() as an
+      // "An embedded page at ...googleusercontent.com says" dialog, which looks broken.
+      // Blocking-style (must tap OK) but non-blocking in code, so callers keep using
+      // `return showAlert(...)` to stop a submit the same way `return alert(...)` did.
+      function showAlert(msg) {
+        document.getElementById('alertModalMsg').innerText = msg;
+        document.getElementById('alertModal').classList.add('show');
+        document.getElementById('alertModalOk').focus();
+      }
+
+      function closeAlert() { document.getElementById('alertModal').classList.remove('show'); }
+
       function logout() {
         localStorage.removeItem('lastActiveUser'); // keeps cachedApp_<user> intact so this user can still log in offline next time
         userSession = {}; employees = []; registerState = {}; hasGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = []; earlyRecordsLog = [];
@@ -475,7 +499,7 @@
  
       function login() {
         const u = document.getElementById('user').value, p = document.getElementById('pass').value;
-        if(!u || !p) return alert("Fill credentials");
+        if(!u || !p) return showAlert("Fill credentials");
         const btn = document.getElementById('loginBtn'); btn.disabled = true; btn.innerText = "Authenticating...";
  
         if (!navigator.onLine) {
@@ -489,7 +513,7 @@
             if (!hadStaff) document.getElementById('staffList').innerHTML = '<div class="loading-msg">No cached staff list for this user yet — log in online once to load it.</div>';
             showToast("Offline Mode: using saved login");
           } else {
-            alert("No internet connection, and no saved offline login found for this username/password on this device. Log in online at least once first.");
+            showAlert("No internet connection, and no saved offline login found for this username/password on this device. Log in online at least once first.");
           }
           return;
         }
@@ -501,7 +525,7 @@
             saveOfflineCredential(u, p, res); // enables offline login for this user going forward
             enterApp();
             loadData();
-          } else alert(res.message);
+          } else showAlert(res.message);
         }).catch(() => {
           btn.disabled = false; btn.innerText = "Log In";
           // navigator.onLine said true but the request still failed — fall back to offline credentials too
@@ -514,7 +538,7 @@
             if (!hadStaff) document.getElementById('staffList').innerHTML = '<div class="loading-msg">No cached staff list for this user yet — log in online once to load it.</div>';
             showToast("Offline Mode: using saved login");
           } else {
-            alert("Could not reach the server, and no saved offline login found for this user.");
+            showAlert("Could not reach the server, and no saved offline login found for this user.");
           }
         });
       }
@@ -652,7 +676,7 @@
  
       function submitLate() {
         if (lateSubmitLock) return; // guard against rapid double-taps firing two separate submissions
-        const idx = document.getElementById('lateEmpSelect').value; const durData = document.getElementById('lateDuration').dataset; if(!idx || !durData.status) return alert("Select staff and time.");
+        const idx = document.getElementById('lateEmpSelect').value; const durData = document.getElementById('lateDuration').dataset; if(!idx || !durData.status) return showAlert("Select staff and time.");
  
         lateSubmitLock = true;
         const btn = document.getElementById('lateSubmitBtn'); btn.disabled = true;
@@ -717,8 +741,8 @@
         const idx = document.getElementById('earlyEmpSelect').value;
         const timeLeft = document.getElementById('earlyTimeLeft').value;
         const reason = document.getElementById('earlyReason').value;
-        if(!idx || !timeLeft) return alert("Select staff and the time they left.");
-        if(!reason) return alert("A reason is required.");
+        if(!idx || !timeLeft) return showAlert("Select staff and the time they left.");
+        if(!reason) return showAlert("A reason is required.");
 
         earlySubmitLock = true;
         const btn = document.getElementById('earlySubmitBtn'); btn.disabled = true;
@@ -773,8 +797,8 @@
         if (endShiftSubmitLock) return; // guard against rapid double-taps firing two separate submissions
         const endTime = document.getElementById('shiftEndTime').value;
         const date = document.getElementById('regDate').value;
-        if (!date) return alert("Set the Date on the Attendance tab first.");
-        if (!endTime) return alert("Enter the End Shift time.");
+        if (!date) return showAlert("Set the Date on the Attendance tab first.");
+        if (!endTime) return showAlert("Enter the End Shift time.");
 
         endShiftSubmitLock = true;
         const btn = document.getElementById('endShiftSubmitBtn'); btn.disabled = true; btn.innerText = "Syncing...";
@@ -790,7 +814,7 @@
             if (res.duplicate) { showToast("End Shift already recorded — summary was already sent."); }
             else { showToast(`End Shift recorded — ${res.presentCount} present, ${res.notPresentCount} not present. Summary emailed.`); }
           }
-          else if (res) { alert(res.message); }
+          else if (res) { showAlert(res.message); }
         }).then((outcome) => {
           btn.disabled = false;
           endShiftSubmitLock = false;
@@ -817,12 +841,12 @@
       function submitRegister() {
         if (registerSubmitLock) return; // guard against rapid double-taps firing two separate submissions
         const pCount = parseInt(document.getElementById('cntP').innerText); const signOff = document.getElementById('signOffName').value;
-        if (!document.getElementById('shiftStartTime').value) return alert("Start Shift is required.");
-        if (pCount > 0 && !hasGroupPhoto) return alert("Group photo required.");
-        if (!signOff) return alert("Sign off name required.");
+        if (!document.getElementById('shiftStartTime').value) return showAlert("Start Shift is required.");
+        if (pCount > 0 && !hasGroupPhoto) return showAlert("Group photo required.");
+        if (!signOff) return showAlert("Sign off name required.");
         const final = employees.map((e, i) => ({ name: e.name, status: registerState[i].status, absentReason: registerState[i].absentReason, replacement: registerState[i].replacement, lateDuration: registerState[i].lateDuration, lateReason: registerState[i].lateReason, earlyTimeLeft: registerState[i].earlyTimeLeft, earlyReason: registerState[i].earlyReason }));
-        if(final.some(r => r.status === 'unmarked')) return alert("Mark all staff.");
-        if(final.some(r => r.status === 'Absent' && (!r.absentReason || !r.replacement))) return alert("Absent staff require Reason AND Replacement.");
+        if(final.some(r => r.status === 'unmarked')) return showAlert("Mark all staff.");
+        if(final.some(r => r.status === 'Absent' && (!r.absentReason || !r.replacement))) return showAlert("Absent staff require Reason AND Replacement.");
 
         registerSubmitLock = true;
         const btn = document.getElementById('regSubmitBtn'); btn.disabled = true; btn.innerText = "Syncing...";
@@ -831,7 +855,7 @@
  
         apiCallOrQueue('commit', { payload, isLateEntry: false, skipEmail: false }, 'register_pending', 'register', (res) => {
           if (res && res.status === "Success") { sessionFirstRow = res.firstRow; showToast("Report Sent!"); }
-          else if (res) { alert(res.message); }
+          else if (res) { showAlert(res.message); }
         }).then((outcome) => {
           // FIX: the button used to stay permanently disabled ("Queued – will send when
           // online") until a real sync succeeded — impossible while offline — so there was
