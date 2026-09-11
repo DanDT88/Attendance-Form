@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1B365D">
+    <title>Attendance Admin Dashboard</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+      /* Same design tokens as index.html — the two pages are one product. */
+      :root { --navy: #1B365D; --slate: #4A5568; --bg: #F0F2F5; --border: #E2E8F0; --present-green: #38A169; --absent-red: #E53E3E; --late-orange: #DD6B20; --white: #FFFFFF; }
+      body { font-family: 'Inter', sans-serif; background-color: var(--bg); margin: 0; padding: 12px; color: var(--slate); line-height: 1.5; -webkit-tap-highlight-color: transparent; }
+      .container { width: 100%; max-width: 1100px; margin: 0 auto; }
+      .card { background: var(--white); padding: 24px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); border-top: 8px solid var(--navy); margin-bottom: 24px; }
+      .card-narrow { max-width: 500px; margin-left: auto; margin-right: auto; }
+      h1 { font-size: 22px; color: var(--navy); text-align: center; margin: 0; text-transform: uppercase; font-weight: 800; }
+      h2 { font-size: 14px; color: var(--slate); text-align: center; margin: 6px 0 16px; font-weight: 500; opacity: 0.8; }
+      h3 { font-size: 13px; color: var(--navy); text-transform: uppercase; border-bottom: 1px solid #EEE; padding-bottom: 12px; margin: 0 0 16px; font-weight: 700; }
+      h4 { font-size: 12px; color: var(--navy); text-transform: uppercase; margin: 20px 0 8px; font-weight: 700; }
+      .tabs { display: flex; gap: 8px; margin-bottom: 24px; background: #E4E6EB; padding: 6px; border-radius: 10px; flex-wrap: wrap; }
+      .tab-btn { flex: 1; min-width: 120px; padding: 10px; cursor: pointer; border: none; background: none; font-weight: 600; font-size: 12px; border-radius: 8px; color: var(--slate); }
+      .tab-btn.active { background: var(--white); color: var(--navy); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+      label { display: block; font-weight: 700; margin-top: 14px; font-size: 10px; color: var(--navy); text-transform: uppercase; }
+      input, select { width: 100%; padding: 12px; margin-top: 6px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; box-sizing: border-box; outline: none; background: #F8FAFC; font-family: inherit; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .btn-main { width: 100%; padding: 16px; background: var(--navy); color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 24px; text-transform: uppercase; font-size: 14px; box-shadow: 0 4px 12px rgba(27,54,93,0.2); }
+      .btn-sm { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: #F1F5F9; font-family: inherit; font-size: 11px; font-weight: 700; color: var(--slate); cursor: pointer; }
+      .btn-sm:hover { border-color: var(--navy); color: var(--navy); }
+      .btn-sm.danger { color: var(--absent-red); border-color: #FEB2B2; background: #FFF5F5; }
+      .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: end; }
+      .filters .btn-main { margin-top: 0; padding: 12px; }
+      .stats-bar { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
+      .stat-item { flex: 1; min-width: 110px; text-align: center; padding: 14px; background: #F8FAFC; border: 1px solid var(--border); border-radius: 12px; }
+      .stat-val { display: block; font-size: 22px; font-weight: 800; color: var(--navy); }
+      .stat-label { font-size: 9px; text-transform: uppercase; font-weight: 700; }
+      .table-wrap { overflow-x: auto; margin-top: 12px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { text-align: left; font-size: 10px; text-transform: uppercase; color: var(--navy); background: #F8FAFC; padding: 10px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+      td { padding: 10px; border-bottom: 1px solid #EEE; vertical-align: top; }
+      tr:last-child td { border-bottom: none; }
+      .site-card { background: #F8FAFC; border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+      .site-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .site-name { font-weight: 700; color: var(--navy); font-size: 15px; }
+      .pill { display: inline-block; font-size: 9px; padding: 4px 8px; border-radius: 6px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; }
+      .pill-ok { color: var(--present-green); background: #F0FFF4; border: 1px solid var(--present-green); }
+      .pill-flag { color: var(--absent-red); background: #FFF5F5; border: 1px solid var(--absent-red); }
+      .pill-unknown { color: var(--slate); background: #F1F5F9; border: 1px solid #CBD5E0; }
+      .pill-warn { color: var(--late-orange); background: #FFF5E5; border: 1px solid var(--late-orange); }
+      .badge-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+      .badge-reason { font-weight: 500; text-transform: none; letter-spacing: 0; opacity: 0.9; }
+      .muted { color: #94A3B8; font-size: 12px; }
+      .hidden { display: none; }
+      .loading-msg { text-align: center; padding: 30px; font-size: 14px; font-weight: 600; color: var(--navy); }
+      .err-msg { text-align: center; padding: 14px; font-size: 12px; font-weight: 600; color: var(--absent-red); background: #FDECEC; border: 1px solid var(--absent-red); border-radius: 8px; }
+      .sub-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+      .photo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; }
+      .photo-box { background: #F8FAFC; border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; font-size: 11px; }
+      .photo-box img { width: 100%; border-radius: 8px; margin-top: 6px; }
+      .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+      .toast { position: fixed; bottom: 30px; left: 20px; right: 20px; background: #333; color: white; padding: 14px; border-radius: 10px; text-align: center; font-size: 14px; font-weight: 600; display: none; z-index: 3000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+      .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(27,54,93,0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 4000; }
+      .modal-overlay.show { display: flex; }
+      .modal-box { background: var(--white); width: 100%; max-width: 360px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.20); border-top: 8px solid var(--navy); box-sizing: border-box; text-align: center; }
+      .modal-msg { font-size: 14px; font-weight: 500; color: var(--slate); white-space: pre-wrap; }
+      .modal-box .btn-main { margin-top: 20px; }
+
+      /* Export PDF == the browser's own print-to-PDF. No library, consistent with
+         the rest of this project. Everything interactive is hidden; the table is
+         re-flowed to read cleanly on paper. */
+      @media print {
+        @page { margin: 14mm; }
+        body { background: #fff; padding: 0; }
+        .no-print, .tabs, .topbar, .filters, .btn-main, .btn-sm, .toast, .modal-overlay { display: none !important; }
+        .card { box-shadow: none; border-top: 4px solid var(--navy); page-break-inside: avoid; margin-bottom: 12px; padding: 0 0 12px; }
+        .container { max-width: none; }
+        .table-wrap { overflow: visible; }
+        table { font-size: 11px; }
+        th { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tr { page-break-inside: avoid; }
+        .print-only { display: block !important; }
+        .site-card, .sub-card { page-break-inside: avoid; }
+      }
+      .print-only { display: none; }
+    </style>
+  </head>
+  <body>
+
+    <div id="toast" class="toast">Action Successful</div>
+
+    <div id="alertModal" class="modal-overlay">
+      <div class="modal-box" role="alertdialog" aria-modal="true" aria-describedby="alertModalMsg">
+        <div id="alertModalMsg" class="modal-msg"></div>
+        <button type="button" class="btn-main" id="alertModalOk" onclick="closeAlert()">OK</button>
+      </div>
+    </div>
+
+    <div class="container">
+
+      <!-- LOGIN -->
+      <div id="loginView" class="card card-narrow">
+        <h1>Admin Portal</h1>
+        <h2>Head Office Attendance Dashboard</h2>
+        <div id="loginConnNote" class="err-msg hidden">No internet connection. This dashboard needs connectivity.</div>
+        <label>Username</label><input type="text" id="adminUser" placeholder="Your username" autocomplete="username">
+        <label>Password</label><input type="password" id="adminPass" placeholder="••••••••" autocomplete="current-password">
+        <button class="btn-main" id="adminLoginBtn" onclick="adminLogin()">Log In</button>
+      </div>
+
+      <!-- APP -->
+      <div id="appView" class="hidden">
+        <div class="card">
+          <div class="topbar">
+            <div>
+              <h1 style="text-align:left;">Attendance Admin</h1>
+              <h2 style="text-align:left; margin:2px 0 0;" id="adminName">—</h2>
+            </div>
+            <button class="btn-sm" onclick="adminLogout()">Log Out</button>
+          </div>
+
+          <div class="tabs no-print">
+            <button class="tab-btn active" id="tabToday" onclick="switchTab('today')">Today's Overview</button>
+            <button class="tab-btn" id="tabReports" onclick="switchTab('reports')">Reports &amp; Trends</button>
+            <button class="tab-btn" id="tabStaff" onclick="switchTab('staff')">Staff Directory</button>
+            <button class="tab-btn" id="tabCompliance" onclick="switchTab('compliance')">Compliance Review</button>
+          </div>
+
+          <!-- ===================== TODAY'S OVERVIEW ===================== -->
+          <div id="sectionToday">
+            <h3>Today's Overview</h3>
+            <div class="filters no-print">
+              <div><label>Date</label><input type="date" id="todayDate"></div>
+              <div><label>Company</label><input type="text" id="todayComp" placeholder="All companies"></div>
+              <div><button class="btn-main" onclick="loadToday()">Refresh</button></div>
+            </div>
+            <div id="todayBody"><div class="loading-msg">Loading…</div></div>
+          </div>
+
+          <!-- ===================== REPORTS & TRENDS ===================== -->
+          <div id="sectionReports" class="hidden">
+            <h3>Reports &amp; Trends</h3>
+            <div class="filters no-print">
+              <div><label>Start Date</label><input type="date" id="repStart"></div>
+              <div><label>End Date</label><input type="date" id="repEnd"></div>
+              <div><label>Company</label><input type="text" id="repComp" placeholder="All"></div>
+              <div><label>Region</label><input type="text" id="repReg" placeholder="All"></div>
+              <div><label>Site</label><input type="text" id="repSite" placeholder="All"></div>
+              <div><button class="btn-main" onclick="loadReports()">Run Report</button></div>
+            </div>
+            <div class="no-print" style="margin-top:12px;">
+              <button class="btn-sm" onclick="window.print()">Export PDF</button>
+              <span class="muted">Opens your browser's print dialog — choose "Save as PDF".</span>
+            </div>
+            <div id="repPrintHead" class="print-only"></div>
+            <div id="reportsBody"><div class="muted" style="margin-top:16px;">Choose a range and run the report.</div></div>
+          </div>
+
+          <!-- ===================== STAFF DIRECTORY ===================== -->
+          <div id="sectionStaff" class="hidden">
+            <h3>Staff Directory</h3>
+            <div class="no-print">
+              <button class="btn-sm" onclick="loadDirectory()">Reload</button>
+              <label style="display:inline-block; margin-left:14px;">
+                <input type="checkbox" id="showInactive" style="width:auto; margin:0 4px 0 0;" onchange="renderDirectory()"> Show deactivated
+              </label>
+            </div>
+
+            <h4>Employees</h4>
+            <div id="empBody"><div class="muted">Not loaded.</div></div>
+            <div class="site-card no-print" style="margin-top:12px;">
+              <div class="site-name" style="margin-bottom:8px;">Add Employee</div>
+              <div class="filters">
+                <div><label>First Name</label><input type="text" id="empFirst"></div>
+                <div><label>Last Name</label><input type="text" id="empLast"></div>
+                <div><label>Company</label><input type="text" id="empComp"></div>
+                <div><label>Region</label><input type="text" id="empReg"></div>
+                <div><label>Site</label><input type="text" id="empSite"></div>
+                <div><label>Title</label><input type="text" id="empTitle" placeholder="Staff"></div>
+                <div><button class="btn-main" onclick="addEmployee()">Add</button></div>
+              </div>
+            </div>
+
+            <h4>Replacement Pool</h4>
+            <div id="repPoolBody"><div class="muted">Not loaded.</div></div>
+            <div class="site-card no-print" style="margin-top:12px;">
+              <div class="site-name" style="margin-bottom:8px;">Add Replacement</div>
+              <div class="filters">
+                <div><label>First Name</label><input type="text" id="poolFirst"></div>
+                <div><label>Last Name</label><input type="text" id="poolLast"></div>
+                <div><label>Company</label><input type="text" id="poolComp"></div>
+                <div><label>Region</label><input type="text" id="poolReg"></div>
+                <div><button class="btn-main" onclick="addReplacement()">Add</button></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===================== COMPLIANCE REVIEW ===================== -->
+          <div id="sectionCompliance" class="hidden">
+            <h3>Compliance Review</h3>
+            <div class="filters no-print">
+              <div><label>Start Date</label><input type="date" id="compStart"></div>
+              <div><label>End Date</label><input type="date" id="compEnd"></div>
+              <div><label>Company</label><input type="text" id="compComp" placeholder="All"></div>
+              <div><label>Site</label><input type="text" id="compSite" placeholder="All"></div>
+              <div><button class="btn-main" onclick="loadCompliance()">Review</button></div>
+            </div>
+            <div id="complianceBody"><div class="muted" style="margin-top:16px;">Defaults to the last 7 days — press Review.</div></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- APPS_SCRIPT_URL lives in one shared file rather than being hardcoded again here. -->
+    <script src="./config.js"></script>
+    <script>
+      // =====================================================================
+      // SHARED HELPERS
+      // =====================================================================
+      let adminSession = null;
+      let siteCoords = {};        // lowercased site name -> {lat, lng}
+      let directory = { employees: [], replacements: [] };
+      let lastReportRows = [];
+
+      function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.display = 'block'; setTimeout(() => { t.style.display = 'none'; }, 4000); }
+      function showAlert(msg) {
+        document.getElementById('alertModalMsg').innerText = msg;
+        document.getElementById('alertModal').classList.add('show');
+        document.getElementById('alertModalOk').focus();
+      }
+      function closeAlert() { document.getElementById('alertModal').classList.remove('show'); }
+
+      /** Escapes anything sheet-authored before it reaches innerHTML. */
+      function esc(v) {
+        return (v === null || v === undefined ? "" : String(v))
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      }
+
+      /** Same text/plain POST the mobile app uses — avoids a CORS preflight. */
+      function apiCall(action, data = {}) {
+        return new Promise((resolve, reject) => {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 55000);
+          fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action, ...data }),
+            signal: controller.signal
+          })
+            .then((res) => res.json())
+            .then((json) => { clearTimeout(timeout); resolve(json); })
+            .catch((err) => { clearTimeout(timeout); reject(err); });
+        });
+      }
+
+      function todayISO() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+      function daysAgoISO(n) {
+        const d = new Date(); d.setDate(d.getDate() - n);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+      function deepClean(v) { return (v || "").toString().toLowerCase().trim(); }
+
+      // =====================================================================
+      // AUTH
+      // =====================================================================
+      function adminLogin() {
+        const u = document.getElementById('adminUser').value, p = document.getElementById('adminPass').value;
+        if (!u || !p) return showAlert("Fill credentials");
+        const btn = document.getElementById('adminLoginBtn'); btn.disabled = true; btn.innerText = "Authenticating...";
+        apiCall('adminLogin', { user: u, pass: p }).then((res) => {
+          btn.disabled = false; btn.innerText = "Log In";
+          if (res && res.status === "Success") {
+            adminSession = res;
+            document.getElementById('adminName').innerText = res.name || res.user;
+            document.getElementById('loginView').classList.add('hidden');
+            document.getElementById('appView').classList.remove('hidden');
+            initDefaults();
+            loadSiteCoords();
+            loadToday();
+          } else {
+            showAlert((res && res.message) || "Login failed.");
+          }
+        }).catch(() => {
+          btn.disabled = false; btn.innerText = "Log In";
+          showAlert("Could not reach the server. Check your connection and try again.");
+        });
+      }
+
+      function adminLogout() {
+        adminSession = null;
+        document.getElementById('adminUser').value = "";
+        document.getElementById('adminPass').value = "";
+        document.getElementById('appView').classList.add('hidden');
+        document.getElementById('loginView').classList.remove('hidden');
+        showToast("Logged out.");
+      }
+
+      function initDefaults() {
+        document.getElementById('todayDate').value = todayISO();
+        document.getElementById('repStart').value = daysAgoISO(30);
+        document.getElementById('repEnd').value = todayISO();
+        document.getElementById('compStart').value = daysAgoISO(7);
+        document.getElementById('compEnd').value = todayISO();
+      }
+
+      function switchTab(tab) {
+        document.getElementById('sectionToday').classList.toggle('hidden', tab !== 'today');
+        document.getElementById('sectionReports').classList.toggle('hidden', tab !== 'reports');
+        document.getElementById('sectionStaff').classList.toggle('hidden', tab !== 'staff');
+        document.getElementById('sectionCompliance').classList.toggle('hidden', tab !== 'compliance');
+        document.getElementById('tabToday').classList.toggle('active', tab === 'today');
+        document.getElementById('tabReports').classList.toggle('active', tab === 'reports');
+        document.getElementById('tabStaff').classList.toggle('active', tab === 'staff');
+        document.getElementById('tabCompliance').classList.toggle('active', tab === 'compliance');
+        if (tab === 'staff' && !directory.employees.length) loadDirectory();
+      }
+
+      function loadSiteCoords() {
+        apiCall('getSiteLocations').then((res) => {
+          if (res && res.status === "Success") {
+            siteCoords = {};
+            (res.rows || []).forEach(r => { siteCoords[deepClean(r.site)] = { lat: r.lat, lng: r.lng }; });
+          }
+        }).catch(() => { /* distances just render as "distance unknown" */ });
+      }
+
+      // =====================================================================
+      // STATUS / PHOTO INTERPRETATION
+      //
+      // The register stores only the supervisor photo in the sheet; the group
+      // photo is emailed and the sheet keeps StaffPhotoCount instead. A cell
+      // reading "Image in Email" means the photo WAS taken but exceeded the
+      // 48,000-character cell limit — that is not a missing photo.
+      // =====================================================================
+      function supPhotoTaken(row) { return row["SupPhotoPresent"] === true || row["SupPhoto"] === "Image in Email"; }
+      function groupPhotoTaken(row) { return !!row["StaffPhotoCount"] && String(row["StaffPhotoCount"]) !== "0"; }
+
+      function statusOf(row) { return deepClean(row["Status"]); }
+
+      function summarize(rows) {
+        const s = { present: 0, absent: 0, late: 0, early: 0, total: rows.length };
+        rows.forEach(r => {
+          const st = statusOf(r);
+          if (st === 'present') s.present++;
+          else if (st === 'absent') s.absent++;
+          else if (st === 'late') { s.late++; s.present++; }
+          else if (st === 'left early') s.early++;
+        });
+        return s;
+      }
+
+      // =====================================================================
+      // 1. TODAY'S OVERVIEW
+      // =====================================================================
+      function loadToday() {
+        const date = document.getElementById('todayDate').value || todayISO();
+        const comp = document.getElementById('todayComp').value.trim();
+        const host = document.getElementById('todayBody');
+        host.innerHTML = '<div class="loading-msg">Loading…</div>';
+        apiCall('getAttendanceByDateRange', { startDate: date, endDate: date, comp: comp })
+          .then((res) => {
+            if (!res || res.status !== "Success") { host.innerHTML = `<div class="err-msg">${esc((res && res.message) || "Could not load attendance.")}</div>`; return; }
+            renderToday(res.rows || [], date, host);
+          })
+          .catch(() => { host.innerHTML = '<div class="err-msg">Could not reach the server.</div>'; });
+      }
+
+      function renderToday(rows, date, host) {
+        if (!rows.length) { host.innerHTML = `<div class="muted" style="margin-top:16px;">No submissions recorded for ${esc(date)}.</div>`; return; }
+
+        const bySite = {};
+        rows.forEach(r => {
+          const key = r["Site"] || "(no site)";
+          if (!bySite[key]) bySite[key] = [];
+          bySite[key].push(r);
+        });
+
+        const all = summarize(rows);
+        let html = `<div class="stats-bar">
+          <div class="stat-item"><span class="stat-val">${Object.keys(bySite).length}</span><span class="stat-label">Sites Reporting</span></div>
+          <div class="stat-item"><span class="stat-val">${all.present}</span><span class="stat-label">Present/Late</span></div>
+          <div class="stat-item"><span class="stat-val" style="color:var(--absent-red)">${all.absent}</span><span class="stat-label">Absent</span></div>
+          <div class="stat-item"><span class="stat-val" style="color:var(--late-orange)">${all.late}</span><span class="stat-label">Late</span></div>
+          <div class="stat-item"><span class="stat-val" style="color:var(--late-orange)">${all.early}</span><span class="stat-label">Left Early</span></div>
+        </div>`;
+
+        Object.keys(bySite).sort().forEach(site => {
+          const siteRows = bySite[site];
+          const s = summarize(siteRows);
+          const endShiftDone = siteRows.some(r => !!r["End Shift Time"]);
+          const missingSup = siteRows.some(r => !supPhotoTaken(r));
+          const missingGroup = siteRows.some(r => !groupPhotoTaken(r));
+          html += `<div class="site-card">
+            <div class="site-head">
+              <span class="site-name">${esc(site)}</span>
+              <span>
+                ${endShiftDone
+                  ? `<span class="pill pill-ok">End Shift Submitted</span>`
+                  : `<span class="pill pill-warn">End Shift Outstanding</span>`}
+                ${(missingSup || missingGroup)
+                  ? `<span class="pill pill-flag">Missing ${missingSup && missingGroup ? 'Photos' : (missingSup ? 'Supervisor Photo' : 'Group Photo')}</span>`
+                  : `<span class="pill pill-ok">Photos Complete</span>`}
+              </span>
+            </div>
+            <div class="stats-bar" style="margin:12px 0 0;">
+              <div class="stat-item"><span class="stat-val">${s.present}</span><span class="stat-label">Present/Late</span></div>
+              <div class="stat-item"><span class="stat-val" style="color:var(--absent-red)">${s.absent}</span><span class="stat-label">Absent</span></div>
+              <div class="stat-item"><span class="stat-val" style="color:var(--late-orange)">${s.late}</span><span class="stat-label">Late</span></div>
+              <div class="stat-item"><span class="stat-val" style="color:var(--late-orange)">${s.early}</span><span class="stat-label">Left Early</span></div>
+              <div class="stat-item"><span class="stat-val">${esc(siteRows[0]["End Shift Time"] || "—")}</span><span class="stat-label">End Time</span></div>
+            </div>
+          </div>`;
+        });
+        host.innerHTML = html;
+      }
+
+      // =====================================================================
+      // 2. REPORTS & TRENDS
+      // =====================================================================
+      function loadReports() {
+        const startDate = document.getElementById('repStart').value;
+        const endDate = document.getElementById('repEnd').value;
+        if (!startDate || !endDate) return showAlert("Pick a start and end date.");
+        if (startDate > endDate) return showAlert("The start date is after the end date.");
+        const comp = document.getElementById('repComp').value.trim();
+        const reg = document.getElementById('repReg').value.trim();
+        const site = document.getElementById('repSite').value.trim();
+        const host = document.getElementById('reportsBody');
+        host.innerHTML = '<div class="loading-msg">Running…</div>';
+        apiCall('getAttendanceByDateRange', { startDate, endDate, comp, reg, site })
+          .then((res) => {
+            if (!res || res.status !== "Success") { host.innerHTML = `<div class="err-msg">${esc((res && res.message) || "Could not load attendance.")}</div>`; return; }
+            lastReportRows = res.rows || [];
+            document.getElementById('repPrintHead').innerHTML =
+              `<h3>Attendance Report — ${esc(startDate)} to ${esc(endDate)}</h3>
+               <p class="muted">${esc(comp || "All companies")}${reg ? " · " + esc(reg) : ""}${site ? " · " + esc(site) : ""}</p>`;
+            renderReports(lastReportRows, host);
+          })
+          .catch(() => { host.innerHTML = '<div class="err-msg">Could not reach the server.</div>'; });
+      }
+
+      function renderReports(rows, host) {
+        if (!rows.length) { host.innerHTML = '<div class="muted" style="margin-top:16px;">No records in that range.</div>'; return; }
+        const s = summarize(rows);
+        const pct = (n) => s.total ? ((n / s.total) * 100).toFixed(1) + "%" : "0%";
+
+        let html = `<div class="stats-bar">
+          <div class="stat-item"><span class="stat-val">${s.total}</span><span class="stat-label">Records</span></div>
+          <div class="stat-item"><span class="stat-val" style="color:var(--absent-red)">${pct(s.absent)}</span><span class="stat-label">Absenteeism Rate</span></div>
+          <div class="stat-item"><span class="stat-val" style="color:var(--late-orange)">${pct(s.late)}</span><span class="stat-label">Lateness Frequency</span></div>
+          <div class="stat-item"><span class="stat-val" style="color:var(--late-orange)">${pct(s.early)}</span><span class="stat-label">Left Early Rate</span></div>
+        </div>`;
+
+        html += `<div class="table-wrap"><table><thead><tr>
+          <th>Date</th><th>Site</th><th>Employee</th><th>Status</th><th>Reason / Duration</th><th>Replacement</th><th>Shift</th><th>Supervisor</th>
+        </tr></thead><tbody>`;
+        rows.forEach(r => {
+          const st = statusOf(r);
+          const color = (st === 'present') ? 'var(--present-green)' : (st === 'absent' ? 'var(--absent-red)' : 'var(--late-orange)');
+          html += `<tr>
+            <td>${esc(r["Date"])}</td>
+            <td>${esc(r["Site"])}</td>
+            <td>${esc(r["Employee"])}</td>
+            <td style="color:${color}; font-weight:700;">${esc(r["Status"])}</td>
+            <td>${esc(r["Reason/Duration"])}</td>
+            <td>${esc(r["Replacement"])}</td>
+            <td>${esc(r["Shift"])}</td>
+            <td>${esc(r["Supervisor"])}</td>
+          </tr>`;
+        });
+        html += `</tbody></table></div>`;
+        host.innerHTML = html;
+      }
+
+      // =====================================================================
+      // 3. STAFF DIRECTORY
+      // =====================================================================
+      function loadDirectory() {
+        document.getElementById('empBody').innerHTML = '<div class="loading-msg">Loading…</div>';
+        document.getElementById('repPoolBody').innerHTML = '<div class="loading-msg">Loading…</div>';
+        Promise.all([apiCall('getAllEmployees'), apiCall('getAllReplacements')])
+          .then(([emps, reps]) => {
+            directory.employees = (emps && emps.status === "Success") ? (emps.rows || []) : [];
+            directory.replacements = (reps && reps.status === "Success") ? (reps.rows || []) : [];
+            renderDirectory();
+          })
+          .catch(() => {
+            document.getElementById('empBody').innerHTML = '<div class="err-msg">Could not reach the server.</div>';
+            document.getElementById('repPoolBody').innerHTML = '';
+          });
+      }
+
+      function renderDirectory() {
+        const showInactive = document.getElementById('showInactive').checked;
+        const isActive = (r) => deepClean(r.status) !== 'inactive';
+
+        const emps = directory.employees.filter(r => showInactive || isActive(r));
+        let eh = `<div class="table-wrap"><table><thead><tr>
+          <th>Name</th><th>Company</th><th>Region</th><th>Site</th><th>Title</th><th>Status</th><th class="no-print">Actions</th>
+        </tr></thead><tbody>`;
+        if (!emps.length) eh += `<tr><td colspan="7" class="muted">No employees to show.</td></tr>`;
+        emps.forEach(r => {
+          eh += `<tr>
+            <td>${esc(r.firstName)} ${esc(r.lastName)}</td>
+            <td>${esc(r.comp)}</td><td>${esc(r.reg)}</td><td>${esc(r.site)}</td><td>${esc(r.title)}</td>
+            <td>${isActive(r) ? '<span class="pill pill-ok">Active</span>' : '<span class="pill pill-unknown">Inactive</span>'}</td>
+            <td class="no-print">
+              <button class="btn-sm" onclick="editEmployee(${r.sheetRow})">Edit</button>
+              <button class="btn-sm ${isActive(r) ? 'danger' : ''}" onclick="toggleEmployee(${r.sheetRow}, ${isActive(r) ? 'false' : 'true'})">${isActive(r) ? 'Deactivate' : 'Reactivate'}</button>
+            </td>
+          </tr>`;
+        });
+        eh += `</tbody></table></div>`;
+        document.getElementById('empBody').innerHTML = eh;
+
+        const reps = directory.replacements.filter(r => showInactive || isActive(r));
+        let rh = `<div class="table-wrap"><table><thead><tr>
+          <th>Name</th><th>Company</th><th>Region</th><th>Status</th><th class="no-print">Actions</th>
+        </tr></thead><tbody>`;
+        if (!reps.length) rh += `<tr><td colspan="5" class="muted">No replacement pool members to show.</td></tr>`;
+        reps.forEach(r => {
+          rh += `<tr>
+            <td>${esc(r.firstName)} ${esc(r.lastName)}</td>
+            <td>${esc(r.comp)}</td><td>${esc(r.reg)}</td>
+            <td>${isActive(r) ? '<span class="pill pill-ok">Active</span>' : '<span class="pill pill-unknown">Inactive</span>'}</td>
+            <td class="no-print">
+              <button class="btn-sm" onclick="editReplacement(${r.sheetRow})">Edit</button>
+              <button class="btn-sm ${isActive(r) ? 'danger' : ''}" onclick="toggleReplacement(${r.sheetRow}, ${isActive(r) ? 'false' : 'true'})">${isActive(r) ? 'Deactivate' : 'Reactivate'}</button>
+            </td>
+          </tr>`;
+        });
+        rh += `</tbody></table></div>`;
+        document.getElementById('repPoolBody').innerHTML = rh;
+      }
+
+      function addEmployee() {
+        const emp = {
+          firstName: document.getElementById('empFirst').value.trim(),
+          lastName: document.getElementById('empLast').value.trim(),
+          comp: document.getElementById('empComp').value.trim(),
+          reg: document.getElementById('empReg').value.trim(),
+          site: document.getElementById('empSite').value.trim(),
+          title: document.getElementById('empTitle').value.trim() || "Staff"
+        };
+        if (!emp.firstName) return showAlert("First name is required.");
+        apiCall('addEmployee', { employee: emp }).then((res) => {
+          if (res && res.status === "Success") {
+            ['empFirst', 'empLast', 'empComp', 'empReg', 'empSite', 'empTitle'].forEach(id => document.getElementById(id).value = "");
+            showToast("Employee added.");
+            loadDirectory();
+          } else { showAlert((res && res.message) || "Could not add employee."); }
+        }).catch(() => showAlert("Could not reach the server."));
+      }
+
+      /* Edit uses prompt() deliberately: it keeps a full inline edit form out of
+         a dashboard that is mostly read-only, and admins edit rarely. */
+      function editEmployee(sheetRow) {
+        const r = directory.employees.find(e => e.sheetRow === sheetRow);
+        if (!r) return;
+        const firstName = prompt("First name:", r.firstName); if (firstName === null) return;
+        const lastName = prompt("Last name:", r.lastName); if (lastName === null) return;
+        const comp = prompt("Company:", r.comp); if (comp === null) return;
+        const reg = prompt("Region:", r.reg); if (reg === null) return;
+        const site = prompt("Site:", r.site); if (site === null) return;
+        const title = prompt("Title:", r.title); if (title === null) return;
+        apiCall('updateEmployee', { employee: { sheetRow, firstName, lastName, comp, reg, site, title } }).then((res) => {
+          if (res && res.status === "Success") { showToast("Employee updated."); loadDirectory(); }
+          else { showAlert((res && res.message) || "Could not update employee."); }
+        }).catch(() => showAlert("Could not reach the server."));
+      }
+
+      function toggleEmployee(sheetRow, reactivate) {
+        apiCall('deactivateEmployee', { sheetRow, reactivate }).then((res) => {
+          if (res && res.status === "Success") { showToast(reactivate ? "Employee reactivated." : "Employee deactivated."); loadDirectory(); }
+          else { showAlert((res && res.message) || "Could not update employee."); }
+        }).catch(() => showAlert("Could not reach the server."));
+      }
+
+      function addReplacement() {
+        const rep = {
+          firstName: document.getElementById('poolFirst').value.trim(),
+          lastName: document.getElementById('poolLast').value.trim(),
+          comp: document.getElementById('poolComp').value.trim(),
+          reg: document.getElementById('poolReg').value.trim()
+        };
+        if (!rep.firstName) return showAlert("First name is required.");
+        apiCall('addReplacement', { replacement: rep }).then((res) => {
+          if (res && res.status === "Success") {
+            ['poolFirst', 'poolLast', 'poolComp', 'poolReg'].forEach(id => document.getElementById(id).value = "");
+            showToast("Replacement added.");
+            loadDirectory();
+          } else { showAlert((res && res.message) || "Could not add replacement."); }
+        }).catch(() => showAlert("Could not reach the server."));
+      }
+
+      function editReplacement(sheetRow) {
+        const r = directory.replacements.find(e => e.sheetRow === sheetRow);
+        if (!r) return;
+        const firstName = prompt("First name:", r.firstName); if (firstName === null) return;
+        const lastName = prompt("Last name:", r.lastName); if (lastName === null) return;
+        const comp = prompt("Company:", r.comp); if (comp === null) return;
+        const reg = prompt("Region:", r.reg); if (reg === null) return;
+        apiCall('updateReplacement', { replacement: { sheetRow, firstName, lastName, comp, reg } }).then((res) => {
+          if (res && res.status === "Success") { showToast("Replacement updated."); loadDirectory(); }
+          else { showAlert((res && res.message) || "Could not update replacement."); }
+        }).catch(() => showAlert("Could not reach the server."));
+      }
+
+      function toggleReplacement(sheetRow, reactivate) {
+        apiCall('deleteReplacement', { sheetRow, reactivate }).then((res) => {
+          if (res && res.status === "Success") { showToast(reactivate ? "Replacement reactivated." : "Replacement deactivated."); loadDirectory(); }
+          else { showAlert((res && res.message) || "Could not update replacement."); }
+        }).catch(() => showAlert("Could not reach the server."));
+      }
+
+      // =====================================================================
+      // 4. COMPLIANCE REVIEW
+      // =====================================================================
+
+      /** Great-circle distance in meters — mirrors haversineDistanceMeters in Code.gs. */
+      function haversineMeters(lat1, lng1, lat2, lng2) {
+        const R = 6371000, toRad = (d) => d * Math.PI / 180;
+        const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      function fmtDistance(m) { return m >= 1000 ? (m / 1000).toFixed(1) + "km from site" : Math.round(m) + "m from site"; }
+
+      /** Shortest gap between two clock times in minutes — mirrors clockDiffMins in Code.gs. */
+      function clockDiffMins(a, b) { const raw = Math.abs(a - b); return Math.min(raw, 1440 - raw); }
+      function timeToMins(t) {
+        if (!t) return null;
+        const bits = String(t).split(':').map(Number);
+        if (bits.length < 2 || isNaN(bits[0]) || isNaN(bits[1])) return null;
+        return bits[0] * 60 + bits[1];
+      }
+
+      /**
+       * Renders one OK / Flagged / Unknown badge. The stored *GeoOK / *TimeOK
+       * value is authoritative for the verdict; the reason text is recomputed
+       * here from the raw lat/lng/timestamp so the backend never has to store
+       * display strings.
+       */
+      function complianceBadge(label, verdict, reason) {
+        const v = String(verdict);
+        let cls = 'pill-unknown', text = 'Unknown';
+        if (v === 'true' || v === 'TRUE') { cls = 'pill-ok'; text = 'OK'; }
+        else if (v === 'false' || v === 'FALSE') { cls = 'pill-flag'; text = 'Flagged'; }
+        return `<span class="pill ${cls}">${esc(label)}: ${text}${reason ? ` <span class="badge-reason">(${esc(reason)})</span>` : ''}</span>`;
+      }
+
+      function geoReason(row, latKey, lngKey) {
+        const lat = parseFloat(row[latKey]), lng = parseFloat(row[lngKey]);
+        if (isNaN(lat) || isNaN(lng)) return "no coordinates captured";
+        const coords = siteCoords[deepClean(row["Site"])];
+        if (!coords) return "site not in SiteLocations";
+        return fmtDistance(haversineMeters(lat, lng, coords.lat, coords.lng));
+      }
+
+      function timeReason(row, captureKey) {
+        const captured = row[captureKey];
+        if (!captured) return "no capture time recorded";
+        const shiftStart = String(row["Shift"] || "").split('-')[0];
+        const startMins = timeToMins(shiftStart);
+        if (startMins === null) return "no shift start recorded";
+        const d = new Date(captured);
+        if (isNaN(d.getTime())) return "unreadable capture time";
+        const capMins = d.getHours() * 60 + d.getMinutes();
+        const diff = clockDiffMins(startMins, capMins);
+        return diff <= 30 ? `${diff} min from shift start` : `${diff - 30} min outside grace window`;
+      }
+
+      function loadCompliance() {
+        const startDate = document.getElementById('compStart').value || daysAgoISO(7);
+        const endDate = document.getElementById('compEnd').value || todayISO();
+        if (startDate > endDate) return showAlert("The start date is after the end date.");
+        const comp = document.getElementById('compComp').value.trim();
+        const site = document.getElementById('compSite').value.trim();
+        const host = document.getElementById('complianceBody');
+        host.innerHTML = '<div class="loading-msg">Loading…</div>';
+        apiCall('getAttendanceByDateRange', { startDate, endDate, comp, site })
+          .then((res) => {
+            if (!res || res.status !== "Success") { host.innerHTML = `<div class="err-msg">${esc((res && res.message) || "Could not load attendance.")}</div>`; return; }
+            renderCompliance(res.rows || [], host);
+          })
+          .catch(() => { host.innerHTML = '<div class="err-msg">Could not reach the server.</div>'; });
+      }
+
+      /** One card per submission, not per employee row — the photos and the
+          compliance flags belong to the register as a whole. */
+      function renderCompliance(rows, host) {
+        const bySubmission = {};
+        rows.forEach(r => {
+          const id = r["SubmissionID"] || `${r["Date"]}|${r["Site"]}`;
+          if (!bySubmission[id]) bySubmission[id] = [];
+          bySubmission[id].push(r);
+        });
+        const ids = Object.keys(bySubmission);
+        if (!ids.length) { host.innerHTML = '<div class="muted" style="margin-top:16px;">No submissions in that range.</div>'; return; }
+
+        let html = `<div class="muted" style="margin:12px 0;">${ids.length} submission${ids.length === 1 ? '' : 's'} in range.</div>`;
+        ids.forEach(id => {
+          const group = bySubmission[id];
+          const r = group[0];
+          const supTaken = supPhotoTaken(r), groupTaken = groupPhotoTaken(r);
+          html += `<div class="sub-card">
+            <div class="site-head">
+              <span class="site-name">${esc(r["Site"])} — ${esc(r["Date"])}</span>
+              <span class="muted">${esc(r["Supervisor"] || "")} · ${group.length} staff · shift ${esc(r["Shift"] || "—")}</span>
+            </div>
+            <div class="badge-row">
+              ${complianceBadge('Sup Geo', r["SupGeoOK"], geoReason(r, "SupLat", "SupLng"))}
+              ${complianceBadge('Sup Time', r["SupTimeOK"], timeReason(r, "SupCaptureTime"))}
+              ${complianceBadge('Staff Geo', r["StaffGeoOK"], geoReason(r, "StaffLat", "StaffLng"))}
+              ${complianceBadge('Staff Time', r["StaffTimeOK"], timeReason(r, "StaffCaptureTime"))}
+            </div>
+            <div class="photo-grid">
+              <div class="photo-box" id="supbox-${esc(id)}">
+                <b>Supervisor Photo</b>
+                ${supTaken
+                  ? (r["SupPhoto"] === "Image in Email"
+                      ? '<div class="muted">Photo sent via email, not stored</div>'
+                      : `<div class="no-print"><button class="btn-sm" onclick="loadPhotos('${esc(id)}')">Load photo</button></div>`)
+                  : '<div class="muted">No photo captured</div>'}
+              </div>
+              <div class="photo-box">
+                <b>Group Photo</b>
+                ${groupTaken
+                  ? '<div class="muted">Photo sent via email, not stored</div>'
+                  : '<div class="muted">No photo captured</div>'}
+              </div>
+            </div>
+          </div>`;
+        });
+        host.innerHTML = html;
+      }
+
+      /** Fetches the stored image for one submission on demand. */
+      function loadPhotos(submissionId) {
+        const box = document.getElementById(`supbox-${submissionId}`);
+        if (box) box.innerHTML = '<b>Supervisor Photo</b><div class="muted">Loading…</div>';
+        apiCall('getSubmissionPhotos', { submissionId }).then((res) => {
+          if (!box) return;
+          if (res && res.status === "Success" && res.supPhoto && res.supPhoto !== "Image in Email") {
+            const img = document.createElement('img');
+            img.src = res.supPhoto;              // assigned as a property, never interpolated into HTML
+            box.innerHTML = '<b>Supervisor Photo</b>';
+            box.appendChild(img);
+          } else {
+            box.innerHTML = '<b>Supervisor Photo</b><div class="muted">Photo sent via email, not stored</div>';
+          }
+        }).catch(() => { if (box) box.innerHTML = '<b>Supervisor Photo</b><div class="muted">Could not load photo.</div>'; });
+      }
+
+      // =====================================================================
+      // STARTUP
+      // =====================================================================
+      window.addEventListener('load', () => {
+        initDefaults();
+        if (!navigator.onLine) document.getElementById('loginConnNote').classList.remove('hidden');
+        window.addEventListener('online', () => document.getElementById('loginConnNote').classList.add('hidden'));
+        window.addEventListener('offline', () => document.getElementById('loginConnNote').classList.remove('hidden'));
+      });
+    </script>
+  </body>
+</html>

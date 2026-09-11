@@ -225,6 +225,9 @@
         return 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
       }
  
+      /* Runs once at startup purely to warm the permission prompt and give the
+       * first stamp something to show. The authoritative per-photo fix comes
+       * from geolocatePromise() at capture time — see below. */
       function fetchLocation() {
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
@@ -233,6 +236,30 @@
           );
         }
       }
+
+      /* Geolocation is read fresh for every single photo instead of being taken
+       * from a value cached at page load. A supervisor who opens the app before
+       * arriving on site would otherwise stamp every photo of that session with
+       * wherever they happened to open it, which makes the whole location stamp
+       * worthless for compliance. Resolves to null rather than rejecting, so a
+       * denied or timed-out fix never blocks the photo itself. */
+      function geolocatePromise() {
+        return new Promise((resolve) => {
+          if (!navigator.geolocation) return resolve(null);
+          navigator.geolocation.getCurrentPosition(
+            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+          );
+        });
+      }
+
+      /* Raw per-photo coordinates and capture time, keyed by the hidden input id
+       * holding the image. The visual stamp baked into the pixels can't be read
+       * back by the server, so the same facts are kept here as structured data
+       * and sent with the register. */
+      let photoMeta = {};
+      function photoMetaFor(dataId) { return photoMeta[dataId] || { lat: null, lng: null, capturedAt: null }; }
  
       function showToast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.style.display = 'block'; setTimeout(() => { t.style.display = 'none'; }, 4000); }
  
@@ -250,7 +277,7 @@
 
       function logout() {
         localStorage.removeItem('lastActiveUser'); // keeps cachedApp_<user> intact so this user can still log in offline next time
-        userSession = {}; employees = []; registerState = {}; hasGroupPhoto = false; hasEndGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = []; earlyRecordsLog = [];
+        userSession = {}; employees = []; registerState = {}; hasGroupPhoto = false; hasEndGroupPhoto = false; sessionFirstRow = null; lateRecordsLog = []; earlyRecordsLog = []; photoMeta = {};
         registerSubmitLock = false; lateSubmitLock = false; earlySubmitLock = false; endShiftSubmitLock = false;
         document.getElementById('appView').classList.add('hidden');
         document.getElementById('loginView').classList.remove('hidden');
@@ -857,9 +884,14 @@
       const MAX_PHOTO_AGE_MS = 5 * 60 * 1000;
       function isFreshCapture(file) { return !file.lastModified || (Date.now() - file.lastModified) <= MAX_PHOTO_AGE_MS; }
 
-      function handleFile(input, prevId, dataId, labelId, onStored) {
+      async function handleFile(input, prevId, dataId, labelId, onStored) {
         const file = input.files[0]; if (!file) return;
         if (!isFreshCapture(file)) { input.value = ""; return showAlert("This photo must be taken now, with the camera. A saved or downloaded image can't be used."); }
+        // Fresh fix for THIS photo, before stamping. overlayStamp still reads the
+        // currentLocation global, so set it here rather than changing that function.
+        const fix = await geolocatePromise();
+        photoMeta[dataId] = { lat: fix ? fix.lat : null, lng: fix ? fix.lng : null, capturedAt: new Date().toISOString() };
+        currentLocation = fix ? `${fix.lat.toFixed(4)}, ${fix.lng.toFixed(4)}` : "Location: Unavailable";
         const reader = new FileReader();
         reader.onload = (e) => { const img = new Image(); img.onload = () => { overlayStamp(img, document.getElementById('canvas'), (stampedData) => { document.getElementById(prevId).src = stampedData; document.getElementById(prevId).classList.remove('hidden'); document.getElementById(dataId).value = stampedData; if (labelId) document.getElementById(labelId).classList.add('hidden'); if (onStored) onStored(); }); }; img.src = e.target.result; }; reader.readAsDataURL(file);
       }
@@ -879,7 +911,8 @@
         registerSubmitLock = true;
         const btn = document.getElementById('regSubmitBtn'); btn.disabled = true; btn.innerText = "Syncing...";
         const submissionId = generateId(); // reused across any automatic retries of THIS click only — a fresh click for "Update & Resend" gets a new id, so it correctly sends again
-        const payload = { ...userSession, submissionId, date: document.getElementById('regDate').value, shift: document.getElementById('shift').value, shiftType: document.getElementById('shiftType').value, records: final, supPhoto: document.getElementById('supData').value, staffPhoto: document.getElementById('staffData').value, staffPhotoCount: 1, signOffName: signOff, loggedUser: userSession.user, editFirstRow: sessionFirstRow };
+        const supMeta = photoMetaFor('supData'), staffMeta = photoMetaFor('staffData');
+        const payload = { ...userSession, submissionId, date: document.getElementById('regDate').value, shift: document.getElementById('shift').value, shiftType: document.getElementById('shiftType').value, records: final, supPhoto: document.getElementById('supData').value, staffPhoto: document.getElementById('staffData').value, staffPhotoCount: 1, signOffName: signOff, loggedUser: userSession.user, editFirstRow: sessionFirstRow, supPhotoLat: supMeta.lat, supPhotoLng: supMeta.lng, supPhotoCaptureTime: supMeta.capturedAt, staffPhotoLat: staffMeta.lat, staffPhotoLng: staffMeta.lng, staffPhotoCaptureTime: staffMeta.capturedAt };
  
         apiCallOrQueue('commit', { payload, isLateEntry: false, skipEmail: false }, 'register_pending', 'register', (res) => {
           if (res && res.status === "Success") { sessionFirstRow = res.firstRow; showToast("Report Sent!"); }

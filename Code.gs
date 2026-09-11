@@ -43,6 +43,45 @@ function doPost(e) {
       case 'endShift':
         result = portal_commitEndShift(req.payload);
         break;
+
+      // --- Admin dashboard (admin.html) ---
+      case 'adminLogin':
+        result = portal_verifyAdmin(req.user, req.pass);
+        break;
+      case 'getAttendanceByDateRange':
+        result = portal_getAttendanceByDateRange(req);
+        break;
+      case 'getSiteLocations':
+        result = portal_getSiteLocations();
+        break;
+      case 'getSubmissionPhotos':
+        result = portal_getSubmissionPhotos(req);
+        break;
+      case 'getAllEmployees':
+        result = portal_getAllEmployees();
+        break;
+      case 'addEmployee':
+        result = portal_addEmployee(req.employee);
+        break;
+      case 'updateEmployee':
+        result = portal_updateEmployee(req.employee);
+        break;
+      case 'deactivateEmployee':
+        result = portal_deactivateEmployee(req);
+        break;
+      case 'getAllReplacements':
+        result = portal_getAllReplacements();
+        break;
+      case 'addReplacement':
+        result = portal_addReplacement(req.replacement);
+        break;
+      case 'updateReplacement':
+        result = portal_updateReplacement(req.replacement);
+        break;
+      case 'deleteReplacement':
+        result = portal_deleteReplacement(req);
+        break;
+
       default:
         throw new Error('Unknown action: ' + req.action);
     }
@@ -94,6 +133,9 @@ function portal_getFilteredStaff(c, r, s) {
     const rowComp = deepClean(row[2]);
     const rowReg  = deepClean(row[3]);
     const rowSite = deepClean(row[4]);
+    // Deactivated staff drop off the mobile app's list. A blank Status column
+    // counts as active, so employees added before the column existed stay put.
+    if (!isActiveStatus(row[EMPLOYEE_STATUS_COL - 1])) return false;
     return rowComp === targetComp && rowReg === targetReg && rowSite === targetSite;
   });
   /* Added reg property to return object */
@@ -106,9 +148,79 @@ function portal_getReplacementPool() {
   const sheet = ss.getSheetByName('ReplacementPool');
   if (!sheet) return { regions: [], allStaff: [] };
   const data = sheet.getDataRange().getDisplayValues();
-  const regions = [...new Set(data.slice(1).map(row => row[3]))].filter(r => r !== "").sort();
-  const allStaff = data.slice(1).map(row => ({ name: row[0] + " " + row[1], region: row[3] }));
+  // Deactivated pool members drop off the mobile app's replacement picker.
+  const active = data.slice(1).filter(row => isActiveStatus(row[REPLACEMENT_STATUS_COL - 1]));
+  const regions = [...new Set(active.map(row => row[3]))].filter(r => r !== "").sort();
+  const allStaff = active.map(row => ({ name: row[0] + " " + row[1], region: row[3] }));
   return { regions: regions, allStaff: allStaff };
+}
+
+/**
+ * The full Attendance header, in column order. Columns 1-18 are the original
+ * layout, 19-20 were added with the end-of-shift photos, and 21-30 hold the
+ * per-photo compliance data. Only ever APPEND to this — existing columns are
+ * addressed by index throughout this file and in the dashboard.
+ */
+const ATTENDANCE_HEADERS = [
+  "Timestamp", "Date", "Shift", "Company", "Region", "Site", "Employee", "Status",
+  "Reason/Duration", "Replacement", "Supervisor", "Sign-off Name", "SupPhoto",
+  "StaffPhotoCount", "SubmissionID", "Shift Type", "End Shift Time", "End Shift SubmissionID",
+  "End Shift SupPhoto", "End Shift StaffPhoto",
+  "SupLat", "SupLng", "SupCaptureTime", "SupGeoOK", "SupTimeOK",
+  "StaffLat", "StaffLng", "StaffCaptureTime", "StaffGeoOK", "StaffTimeOK"
+];
+
+/** A photo taken more than this far from its site is flagged. */
+const GEO_TOLERANCE_METERS = 1000;
+/** A photo taken more than this far from shift start is flagged. */
+const SHIFT_GRACE_MINS = 30;
+/** Written instead of true/false when compliance genuinely can't be determined. */
+const COMPLIANCE_UNKNOWN = "Unknown";
+
+/**
+ * Soft-delete status columns, appended after each sheet's existing data.
+ * Employees: A-F are First, Last, Company, Region, Site, Title -> Status is G.
+ * ReplacementPool: A-D are First, Last, Company, Region -> Status is E.
+ * A blank cell means Active, so every pre-existing row stays visible.
+ */
+const EMPLOYEE_STATUS_COL = 7;
+const REPLACEMENT_STATUS_COL = 5;
+
+/** True unless the row has been explicitly deactivated. Blank counts as active. */
+function isActiveStatus(v) {
+  return deepCleanValue(v) !== 'inactive';
+}
+
+/** Lowercase + trim, for the case-insensitive matching used across this file. */
+function deepCleanValue(v) {
+  return (v || "").toString().toLowerCase().trim();
+}
+
+/**
+ * Sheets turns a "yyyy-MM-dd" string into a real Date on write, so it reads back
+ * as a Date, not the original string. Normalize both sides the same way before
+ * comparing, or every match silently fails.
+ */
+function normalizeSheetDate(v, tz) {
+  if (v instanceof Date) return Utilities.formatDate(v, tz, "yyyy-MM-dd");
+  return (v || "").toString().trim();
+}
+
+/** "HH:MM" -> minutes since midnight, or null if unparseable. */
+function timeToMins(t) {
+  if (!t) return null;
+  const bits = t.toString().split(':').map(Number);
+  if (bits.length < 2 || isNaN(bits[0]) || isNaN(bits[1])) return null;
+  return bits[0] * 60 + bits[1];
+}
+
+/**
+ * Shortest distance between two clock times, in minutes, wrapping around
+ * midnight — so 23:50 and 00:10 are 20 minutes apart, not 1420.
+ */
+function clockDiffMins(a, b) {
+  const raw = Math.abs(a - b);
+  return Math.min(raw, 1440 - raw);
 }
 
 /**
@@ -162,14 +274,9 @@ function computeEarlyDurationMins(shiftRange, timeLeft) {
   if (!shiftRange || !timeLeft) return null;
   const parts = shiftRange.split('-');
   if (parts.length < 2) return null;
-  const toMins = (t) => {
-    const bits = t.split(':').map(Number);
-    if (bits.length < 2 || isNaN(bits[0]) || isNaN(bits[1])) return null;
-    return bits[0] * 60 + bits[1];
-  };
-  const startMins = toMins(parts[0]);
-  let endMins = toMins(parts[1]);
-  let leftMins = toMins(timeLeft);
+  const startMins = timeToMins(parts[0]);
+  let endMins = timeToMins(parts[1]);
+  let leftMins = timeToMins(timeLeft);
   if (startMins === null || endMins === null || leftMins === null) return null;
   const isOvernightShift = endMins <= startMins;
   if (isOvernightShift) {
@@ -180,6 +287,145 @@ function computeEarlyDurationMins(shiftRange, timeLeft) {
   return diff > 0 ? diff : 0;
 }
 
+/**
+ * The Attendance header row is only written when the sheet is brand new, so a
+ * sheet created before the later columns existed has neither the physical
+ * columns nor the labels for them. Widen it and fill in any blank header cell.
+ * Existing headers and data are never overwritten. A default sheet is 26 columns
+ * wide, so this is what stops a 30-column setValues from throwing.
+ */
+function ensureAttendanceColumns(sheet) {
+  const needed = ATTENDANCE_HEADERS.length;
+  if (sheet.getMaxColumns() < needed) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), needed - sheet.getMaxColumns());
+  }
+  if (sheet.getLastRow() === 0) return; // brand new — the caller's appendRow writes the full header
+  const headerRange = sheet.getRange(1, 1, 1, needed);
+  const header = headerRange.getValues()[0];
+  let changed = false;
+  for (let i = 0; i < needed; i++) {
+    if (!header[i]) { header[i] = ATTENDANCE_HEADERS[i]; changed = true; }
+  }
+  if (changed) headerRange.setValues([header]);
+}
+
+/**
+ * Case-insensitive admin login against the AdminUsers sheet.
+ * Deliberately separate from portal_verifyUser / the Users sheet — supervisor
+ * credentials must not grant head-office access.
+ */
+function portal_verifyAdmin(u, p) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('AdminUsers');
+  if (!sheet) return { status: "Error", message: "No AdminUsers sheet found." };
+  const data = sheet.getDataRange().getValues();
+  const inputUser = (u || "").toString().toLowerCase().trim();
+  const inputPass = (p || "").toString().toLowerCase().trim();
+  for (let i = 1; i < data.length; i++) {
+    const storedUser = (data[i][0] || "").toString().toLowerCase().trim();
+    const storedPass = (data[i][1] || "").toString().toLowerCase().trim();
+    if (storedUser && storedUser === inputUser && storedPass === inputPass) {
+      return { status: "Success", user: data[i][0], name: data[i][2] || data[i][0] };
+    }
+  }
+  return { status: "Error", message: "Invalid credentials." };
+}
+
+/**
+ * Looks up a site's coordinates in the SiteLocations sheet (Site | Latitude | Longitude).
+ * Returns {lat, lng} or null when the sheet or the site is missing, or the row
+ * has no usable numbers — callers treat null as "can't verify", not "failed".
+ */
+function getSiteCoordinates(siteName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('SiteLocations');
+  if (!sheet) return null;
+  const data = sheet.getDataRange().getValues();
+  const target = deepCleanValue(siteName);
+  if (!target) return null;
+  for (let i = 1; i < data.length; i++) {
+    if (deepCleanValue(data[i][0]) === target) {
+      const lat = parseFloat(data[i][1]);
+      const lng = parseFloat(data[i][2]);
+      if (isNaN(lat) || isNaN(lng)) return null;
+      return { lat: lat, lng: lng };
+    }
+  }
+  return null;
+}
+
+/** Great-circle distance between two points, in meters. */
+function haversineDistanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Was this photo taken within SHIFT_GRACE_MINS of the shift starting?
+ * Returns true/false, or null when it can't be determined.
+ *
+ * shiftType is accepted because the caller knows it and the rule may yet differ
+ * by shift, but it is not needed for the arithmetic: clockDiffMins measures the
+ * shortest distance around the clock face, which handles a night shift crossing
+ * midnight on its own. Note this is deliberately NOT the same midnight handling
+ * as computeEarlyDurationMins — that one measures a signed duration across a
+ * shift and must push past midnight; this is a symmetric +/- window, where
+ * pushing past midnight would wrongly flag a photo taken slightly BEFORE start.
+ * The two share timeToMins, which is the part that must not drift.
+ */
+function isWithinShiftGracePeriod(shiftStart, shiftType, captureTimestamp) {
+  const startMins = timeToMins(shiftStart);
+  if (startMins === null || !captureTimestamp) return null;
+  const captured = new Date(captureTimestamp);
+  if (isNaN(captured.getTime())) return null;
+  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const captureMins = timeToMins(Utilities.formatDate(captured, tz, "HH:mm"));
+  if (captureMins === null) return null;
+  return clockDiffMins(startMins, captureMins) <= SHIFT_GRACE_MINS;
+}
+
+/**
+ * Builds the 10 compliance values (columns 21-30) for one register submission.
+ * Both photos are evaluated independently. Anything that can't be verified —
+ * no coordinates from the device, no SiteLocations row, an unparseable
+ * timestamp — is written as "Unknown" rather than false, so an unverifiable
+ * submission is never silently recorded as compliant.
+ *
+ * This is independent of whether the image itself survived the 48k cell gate.
+ */
+function buildComplianceValues(payload) {
+  const siteCoords = getSiteCoordinates(payload.site);
+  const shiftStart = (payload.shift || "").toString().split('-')[0];
+
+  const evaluate = (lat, lng, captureTime) => {
+    const hasCoords = (lat !== undefined && lat !== null && lat !== "" && !isNaN(parseFloat(lat)) &&
+                       lng !== undefined && lng !== null && lng !== "" && !isNaN(parseFloat(lng)));
+    let geoOK = COMPLIANCE_UNKNOWN;
+    if (hasCoords && siteCoords) {
+      const dist = haversineDistanceMeters(parseFloat(lat), parseFloat(lng), siteCoords.lat, siteCoords.lng);
+      geoOK = dist <= GEO_TOLERANCE_METERS;
+    }
+    const within = isWithinShiftGracePeriod(shiftStart, payload.shiftType, captureTime);
+    const timeOK = (within === null) ? COMPLIANCE_UNKNOWN : within;
+    return [
+      hasCoords ? parseFloat(lat) : "",
+      hasCoords ? parseFloat(lng) : "",
+      captureTime || "",
+      geoOK,
+      timeOK
+    ];
+  };
+
+  return evaluate(payload.supPhotoLat, payload.supPhotoLng, payload.supPhotoCaptureTime)
+    .concat(evaluate(payload.staffPhotoLat, payload.staffPhotoLng, payload.staffPhotoCaptureTime));
+}
+
 /** portal_commitAttendanceRow */
 function portal_commitAttendanceRow(payload, isLateEntry = false, skipEmail = false, isEarlyEntry = false) {
   try {
@@ -187,8 +433,9 @@ function portal_commitAttendanceRow(payload, isLateEntry = false, skipEmail = fa
     let attSheet = ss.getSheetByName('Attendance') || ss.insertSheet('Attendance');
     let repSheet = ss.getSheetByName('Replacements') || ss.insertSheet('Replacements');
 
-    if (attSheet.getLastRow() === 0) attSheet.appendRow(["Timestamp", "Date", "Shift", "Company", "Region", "Site", "Employee", "Status", "Reason/Duration", "Replacement", "Supervisor", "Sign-off Name", "SupPhoto", "StaffPhotoCount", "SubmissionID", "Shift Type", "End Shift Time", "End Shift SubmissionID", "End Shift SupPhoto", "End Shift StaffPhoto"]);
+    if (attSheet.getLastRow() === 0) attSheet.appendRow(ATTENDANCE_HEADERS);
     if (repSheet.getLastRow() === 0) repSheet.appendRow(["Timestamp", "Date", "Region", "Site", "Absent Staff", "Replacement Name", "Reason", "Supervisor"]);
+    ensureAttendanceColumns(attSheet);
 
     const SUBMISSION_ID_COL = 15; // column O — must match the header order above
 
@@ -238,6 +485,9 @@ function portal_commitAttendanceRow(payload, isLateEntry = false, skipEmail = fa
       const detail = "Left at " + payload.timeLeft + " - " + (payload.reason || "No reason given");
       attRows.push([ts, payload.date, "", payload.comp, payload.reg, payload.site, payload.empName, "Left Early", detail, "N/A", payload.loggedUser, payload.signOffName || "N/A", "", "1", payload.submissionId || "", payload.shiftType || ""]);
     } else {
+      // Computed once per submission — both photos belong to the whole register,
+      // not to an individual employee row, so every row carries the same values.
+      const complianceValues = buildComplianceValues(payload);
       payload.records.forEach(r => {
         let detail;
         if (r.status === 'Late') {
@@ -249,7 +499,12 @@ function portal_commitAttendanceRow(payload, isLateEntry = false, skipEmail = fa
         } else {
           detail = r.absentReason || "N/A";
         }
-        attRows.push([ts, payload.date, payload.shift, payload.comp, payload.reg, payload.site, r.name, r.status, detail, r.replacement || "N/A", payload.loggedUser, payload.signOffName, sheetSupPhoto, payload.staffPhotoCount, payload.submissionId || "", payload.shiftType || ""]);
+        // Columns 1-16, then 4 blanks holding columns 17-20 (End Shift Time,
+        // End Shift SubmissionID and the two end-of-shift photos, all filled in
+        // later by portal_commitEndShift), then the 10 compliance values in 21-30.
+        // The blanks are load-bearing: setValues writes from column 1, so without
+        // them the compliance data would land on top of the End Shift columns.
+        attRows.push([ts, payload.date, payload.shift, payload.comp, payload.reg, payload.site, r.name, r.status, detail, r.replacement || "N/A", payload.loggedUser, payload.signOffName, sheetSupPhoto, payload.staffPhotoCount, payload.submissionId || "", payload.shiftType || "", "", "", "", ""].concat(complianceValues));
         if (r.status === 'Absent' && r.replacement && r.replacement !== 'None') {
           repRows.push([ts, payload.date, payload.reg, payload.site, r.name, r.replacement, r.absentReason, payload.loggedUser]);
         }
@@ -320,27 +575,14 @@ function portal_commitEndShift(payload) {
     const SHIFT_COL = 3, STATUS_COL = 8, REASON_COL = 9, END_SHIFT_COL = 17, END_SHIFT_SUB_COL = 18;
     const END_SUP_PHOTO_COL = 19, END_STAFF_PHOTO_COL = 20;
 
-    // The Attendance header row is only written when the sheet is brand new, so a
-    // sheet created before end-of-shift photos existed won't have these two columns.
-    // Widen the sheet if necessary and label them on first use.
-    if (attSheet.getMaxColumns() < END_STAFF_PHOTO_COL) {
-      attSheet.insertColumnsAfter(attSheet.getMaxColumns(), END_STAFF_PHOTO_COL - attSheet.getMaxColumns());
-    }
-    if (!attSheet.getRange(1, END_SUP_PHOTO_COL).getValue()) attSheet.getRange(1, END_SUP_PHOTO_COL).setValue("End Shift SupPhoto");
-    if (!attSheet.getRange(1, END_STAFF_PHOTO_COL).getValue()) attSheet.getRange(1, END_STAFF_PHOTO_COL).setValue("End Shift StaffPhoto");
+    ensureAttendanceColumns(attSheet);
 
-    const numCols = Math.max(attSheet.getLastColumn(), END_STAFF_PHOTO_COL);
+    const numCols = Math.max(attSheet.getLastColumn(), ATTENDANCE_HEADERS.length);
     const data = attSheet.getRange(2, 1, lastRow - 1, numCols).getValues();
 
     const tz = ss.getSpreadsheetTimeZone();
-    // Sheets auto-converts a "yyyy-MM-dd" string into a real Date value on write, so when we
-    // read it back it's a Date object, not the original string — normalize both sides the same
-    // way before comparing, or every match silently fails.
-    const normalizeDate = (v) => {
-      if (v instanceof Date) return Utilities.formatDate(v, tz, "yyyy-MM-dd");
-      return (v || "").toString().trim();
-    };
-    const deepClean = (v) => (v || "").toString().toLowerCase().trim();
+    const normalizeDate = (v) => normalizeSheetDate(v, tz);
+    const deepClean = deepCleanValue;
     const targetDate = normalizeDate(payload.date);
     const targetSite = deepClean(payload.site);
     const targetComp = deepClean(payload.comp);
@@ -465,6 +707,275 @@ function portal_commitEndShift(payload) {
     GmailApp.sendEmail(recipients, `End of Shift Summary: ${site} (${payload.date})`, "", { htmlBody: emailHtml, inlineImages: inlineImages, name: "Delta Attendance Form" });
 
     return { status: "Success", updatedRows: openRows.length, presentCount: presentTillEnd.length, notPresentCount: notPresentTillEnd.length };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/**
+ * Returns Attendance rows in a date range as objects keyed to ATTENDANCE_HEADERS,
+ * for the admin dashboard. Today's Overview, Reports & Trends and Compliance
+ * Review all consume this one result set and aggregate it differently client-side.
+ *
+ * comp is required; reg and site are optional filters — omit them for everything.
+ *
+ * Photo columns are stripped unless includePhotos is true. A SupPhoto cell can be
+ * 48,000 characters, so a week of a busy site would otherwise return megabytes of
+ * base64 that the dashboard only needs when someone opens a single submission.
+ */
+function portal_getAttendanceByDateRange(req) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const attSheet = ss.getSheetByName('Attendance');
+    if (!attSheet) return { status: "Success", rows: [] };
+    const lastRow = attSheet.getLastRow();
+    if (lastRow < 2) return { status: "Success", rows: [] };
+
+    const tz = ss.getSpreadsheetTimeZone();
+    const numCols = Math.max(attSheet.getLastColumn(), ATTENDANCE_HEADERS.length);
+    const data = attSheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+
+    const startDate = normalizeSheetDate(req.startDate, tz);
+    const endDate = normalizeSheetDate(req.endDate, tz);
+    const targetComp = deepCleanValue(req.comp);
+    const targetReg = deepCleanValue(req.reg);
+    const targetSite = deepCleanValue(req.site);
+    const includePhotos = req.includePhotos === true;
+    const PHOTO_KEYS = ["SupPhoto", "End Shift SupPhoto", "End Shift StaffPhoto"];
+
+    const rows = [];
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowDate = normalizeSheetDate(row[1], tz);
+      if (startDate && rowDate < startDate) continue;
+      if (endDate && rowDate > endDate) continue;
+      if (targetComp && deepCleanValue(row[3]) !== targetComp) continue;
+      if (targetReg && deepCleanValue(row[4]) !== targetReg) continue;
+      if (targetSite && deepCleanValue(row[5]) !== targetSite) continue;
+
+      const obj = { sheetRow: i + 2 };
+      for (let c = 0; c < ATTENDANCE_HEADERS.length; c++) {
+        const key = ATTENDANCE_HEADERS[c];
+        let val = row[c];
+        if (!includePhotos && PHOTO_KEYS.indexOf(key) !== -1) {
+          // Tell the dashboard whether an image exists without shipping it.
+          obj[key + "Present"] = !!val && val !== "Image in Email";
+          obj[key] = val === "Image in Email" ? "Image in Email" : "";
+          continue;
+        }
+        if (val instanceof Date) val = (c === 1) ? normalizeSheetDate(val, tz) : val.toISOString();
+        obj[key] = (val === null || val === undefined) ? "" : val;
+      }
+      rows.push(obj);
+    }
+    return { status: "Success", rows: rows };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/**
+ * The SiteLocations reference table, so the dashboard can render "1.4km from
+ * site" itself from the stored lat/lng rather than the backend having to store
+ * a display string per row.
+ */
+function portal_getSiteLocations() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('SiteLocations');
+    if (!sheet) return { status: "Success", rows: [] };
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { status: "Success", rows: [] };
+    const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    const rows = data
+      .map(r => ({ site: r[0], lat: parseFloat(r[1]), lng: parseFloat(r[2]) }))
+      .filter(r => r.site && !isNaN(r.lat) && !isNaN(r.lng));
+    return { status: "Success", rows: rows };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/**
+ * The stored images for a single submission, fetched on demand when an admin
+ * opens one in Compliance Review. Keeps getAttendanceByDateRange free of
+ * base64 — a week of submissions would otherwise be megabytes of it.
+ */
+function portal_getSubmissionPhotos(req) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Attendance');
+    if (!sheet) return { status: "Error", message: "No Attendance sheet found." };
+    const row = findExistingSubmissionRow(sheet, req && req.submissionId, 15);
+    if (!row) return { status: "Error", message: "Submission not found." };
+    const vals = sheet.getRange(row, 1, 1, Math.max(sheet.getLastColumn(), ATTENDANCE_HEADERS.length)).getValues()[0];
+    return {
+      status: "Success",
+      supPhoto: vals[12] || "",
+      endSupPhoto: vals[18] || "",
+      endStaffPhoto: vals[19] || ""
+    };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/**
+ * Every employee, for the admin Staff Directory. Unlike portal_getFilteredStaff
+ * this is unfiltered and includes deactivated people, so admins can see and
+ * reactivate them. sheetRow is the stable handle used by update/deactivate.
+ */
+function portal_getAllEmployees() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Employees');
+    if (!sheet) return { status: "Success", rows: [] };
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { status: "Success", rows: [] };
+    const data = sheet.getRange(2, 1, lastRow - 1, Math.max(sheet.getLastColumn(), EMPLOYEE_STATUS_COL)).getValues();
+    const rows = data.map((row, i) => ({
+      sheetRow: i + 2,
+      firstName: row[0], lastName: row[1], comp: row[2], reg: row[3], site: row[4],
+      title: row[5] || "Staff",
+      status: (row[EMPLOYEE_STATUS_COL - 1] || "").toString().trim() || "Active"
+    })).filter(r => r.firstName || r.lastName);
+    return { status: "Success", rows: rows };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/** Appends an employee. Status defaults to Active. */
+function portal_addEmployee(emp) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Employees');
+    if (!sheet) return { status: "Error", message: "No Employees sheet found." };
+    if (!emp || !(emp.firstName || "").toString().trim()) return { status: "Error", message: "First name is required." };
+    if (sheet.getMaxColumns() < EMPLOYEE_STATUS_COL) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), EMPLOYEE_STATUS_COL - sheet.getMaxColumns());
+    }
+    const row = [emp.firstName || "", emp.lastName || "", emp.comp || "", emp.reg || "", emp.site || "", emp.title || "Staff", "Active"];
+    sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+    return { status: "Success", sheetRow: sheet.getLastRow() };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/**
+ * Updates one employee, addressed by sheetRow from portal_getAllEmployees.
+ * Row numbers are a safe handle here precisely because deactivation is a soft
+ * delete — rows are never removed, so indices don't shift under the dashboard.
+ */
+function portal_updateEmployee(emp) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Employees');
+    if (!sheet) return { status: "Error", message: "No Employees sheet found." };
+    const r = parseInt(emp && emp.sheetRow, 10);
+    if (!r || r < 2 || r > sheet.getLastRow()) return { status: "Error", message: "That employee row no longer exists — reload the directory." };
+    if (sheet.getMaxColumns() < EMPLOYEE_STATUS_COL) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), EMPLOYEE_STATUS_COL - sheet.getMaxColumns());
+    }
+    const existing = sheet.getRange(r, 1, 1, EMPLOYEE_STATUS_COL).getValues()[0];
+    const row = [
+      emp.firstName !== undefined ? emp.firstName : existing[0],
+      emp.lastName !== undefined ? emp.lastName : existing[1],
+      emp.comp !== undefined ? emp.comp : existing[2],
+      emp.reg !== undefined ? emp.reg : existing[3],
+      emp.site !== undefined ? emp.site : existing[4],
+      emp.title !== undefined ? emp.title : existing[5],
+      emp.status !== undefined ? emp.status : (existing[6] || "Active")
+    ];
+    sheet.getRange(r, 1, 1, row.length).setValues([row]);
+    return { status: "Success" };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/**
+ * Soft-deletes an employee by setting Status = Inactive. Never removes the row:
+ * their name appears in historical Attendance records and must stay resolvable.
+ * Pass reactivate: true to set them back to Active.
+ */
+function portal_deactivateEmployee(req) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Employees');
+    if (!sheet) return { status: "Error", message: "No Employees sheet found." };
+    const r = parseInt(req && req.sheetRow, 10);
+    if (!r || r < 2 || r > sheet.getLastRow()) return { status: "Error", message: "That employee row no longer exists — reload the directory." };
+    if (sheet.getMaxColumns() < EMPLOYEE_STATUS_COL) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), EMPLOYEE_STATUS_COL - sheet.getMaxColumns());
+    }
+    sheet.getRange(r, EMPLOYEE_STATUS_COL).setValue(req.reactivate ? "Active" : "Inactive");
+    return { status: "Success" };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/** Every replacement-pool member, including deactivated, for the admin directory. */
+function portal_getAllReplacements() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('ReplacementPool');
+    if (!sheet) return { status: "Success", rows: [] };
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { status: "Success", rows: [] };
+    const data = sheet.getRange(2, 1, lastRow - 1, Math.max(sheet.getLastColumn(), REPLACEMENT_STATUS_COL)).getValues();
+    const rows = data.map((row, i) => ({
+      sheetRow: i + 2,
+      firstName: row[0], lastName: row[1], comp: row[2], reg: row[3],
+      status: (row[REPLACEMENT_STATUS_COL - 1] || "").toString().trim() || "Active"
+    })).filter(r => r.firstName || r.lastName);
+    return { status: "Success", rows: rows };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/** Appends a replacement-pool member. */
+function portal_addReplacement(rep) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('ReplacementPool');
+    if (!sheet) return { status: "Error", message: "No ReplacementPool sheet found." };
+    if (!rep || !(rep.firstName || "").toString().trim()) return { status: "Error", message: "First name is required." };
+    if (sheet.getMaxColumns() < REPLACEMENT_STATUS_COL) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), REPLACEMENT_STATUS_COL - sheet.getMaxColumns());
+    }
+    const row = [rep.firstName || "", rep.lastName || "", rep.comp || "", rep.reg || "", "Active"];
+    sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+    return { status: "Success", sheetRow: sheet.getLastRow() };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/** Updates one replacement-pool member, addressed by sheetRow. */
+function portal_updateReplacement(rep) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('ReplacementPool');
+    if (!sheet) return { status: "Error", message: "No ReplacementPool sheet found." };
+    const r = parseInt(rep && rep.sheetRow, 10);
+    if (!r || r < 2 || r > sheet.getLastRow()) return { status: "Error", message: "That row no longer exists — reload the directory." };
+    if (sheet.getMaxColumns() < REPLACEMENT_STATUS_COL) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), REPLACEMENT_STATUS_COL - sheet.getMaxColumns());
+    }
+    const existing = sheet.getRange(r, 1, 1, REPLACEMENT_STATUS_COL).getValues()[0];
+    const row = [
+      rep.firstName !== undefined ? rep.firstName : existing[0],
+      rep.lastName !== undefined ? rep.lastName : existing[1],
+      rep.comp !== undefined ? rep.comp : existing[2],
+      rep.reg !== undefined ? rep.reg : existing[3],
+      rep.status !== undefined ? rep.status : (existing[4] || "Active")
+    ];
+    sheet.getRange(r, 1, 1, row.length).setValues([row]);
+    return { status: "Success" };
+  } catch (e) { return { status: "Error", message: e.toString() }; }
+}
+
+/**
+ * Soft-deletes a replacement-pool member (Status = Inactive) rather than
+ * removing the row — replacement names are recorded in the Replacements history
+ * sheet, and row numbers are the dashboard's handle for every other entry.
+ */
+function portal_deleteReplacement(req) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('ReplacementPool');
+    if (!sheet) return { status: "Error", message: "No ReplacementPool sheet found." };
+    const r = parseInt(req && req.sheetRow, 10);
+    if (!r || r < 2 || r > sheet.getLastRow()) return { status: "Error", message: "That row no longer exists — reload the directory." };
+    if (sheet.getMaxColumns() < REPLACEMENT_STATUS_COL) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), REPLACEMENT_STATUS_COL - sheet.getMaxColumns());
+    }
+    sheet.getRange(r, REPLACEMENT_STATUS_COL).setValue(req.reactivate ? "Active" : "Inactive");
+    return { status: "Success" };
   } catch (e) { return { status: "Error", message: e.toString() }; }
 }
 
