@@ -202,12 +202,15 @@
  
     <canvas id="canvas" class="hidden"></canvas>
  
+    <!-- APPS_SCRIPT_URL comes from config.js — the single place it is defined.
+         Must load BEFORE the main script below, which uses it. -->
+    <script src="./config.js"></script>
     <script>
       // =====================================================================
-      // CONFIG — paste your deployed Apps Script Web App /exec URL here
+      // CONFIG — APPS_SCRIPT_URL is defined in config.js, loaded just above.
+      // Point that one file at a different deployment to switch environments.
       // =====================================================================
-      const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzf_erZFTST-MS2LzWtT2Fy3odL5Pbvud8-jfaaWfKj52w5z-qyWRMt9OuzPMpXUjpfIg/exec";
- 
+
       let userSession = {}; let employees = []; let registerState = {}; let hasGroupPhoto = false; let hasEndGroupPhoto = false; let sessionFirstRow = null;
       let replacementPool = { regions: [], allStaff: [] }; let lateRecordsLog = []; let earlyRecordsLog = [];
       let currentLocation = "Location: Fetching...";

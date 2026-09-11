@@ -7,8 +7,12 @@ const ASSETS = [
   './icon-512.png'
 ];
  
-// Must match APPS_SCRIPT_URL in index.html — update both if you ever redeploy to a new URL.
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw9Ug_XJMWnoRUy5KGKJLDlx1AhXrEMrkNSd4QJNhHtda5aXpgQSGhlAl6Fd6BqqpCSdA/exec";
+// APPS_SCRIPT_URL comes from the same config.js the pages use, so the service
+// worker can never drift onto a different deployment than the app — which is
+// exactly what had happened before: this file and index.html pointed at two
+// different ones. importScripts runs in the worker's global scope, so the
+// const declared in config.js is visible here.
+importScripts('./config.js');
 const DB_NAME = 'AttendanceOfflineDB';
 const STORE_NAME = 'queue';
  
