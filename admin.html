@@ -129,7 +129,8 @@
             <h3>Today's Overview</h3>
             <div class="filters no-print">
               <div><label>Date</label><input type="date" id="todayDate"></div>
-              <div><label>Company</label><input type="text" id="todayComp" placeholder="All companies"></div>
+              <div><label>Site</label><select id="todaySite" class="site-select"><option value="">All sites</option></select></div>
+              <div><label>Company</label><select id="todayComp" class="comp-select"><option value="">All companies</option></select></div>
               <div><button class="btn-main" onclick="loadToday()">Refresh</button></div>
             </div>
             <div id="todayBody"><div class="loading-msg">Loading…</div></div>
@@ -141,9 +142,9 @@
             <div class="filters no-print">
               <div><label>Start Date</label><input type="date" id="repStart"></div>
               <div><label>End Date</label><input type="date" id="repEnd"></div>
-              <div><label>Company</label><input type="text" id="repComp" placeholder="All"></div>
-              <div><label>Region</label><input type="text" id="repReg" placeholder="All"></div>
-              <div><label>Site</label><input type="text" id="repSite" placeholder="All"></div>
+              <div><label>Company</label><select id="repComp" class="comp-select"><option value="">All companies</option></select></div>
+              <div><label>Region</label><select id="repReg" class="reg-select"><option value="">All regions</option></select></div>
+              <div><label>Site</label><select id="repSite" class="site-select"><option value="">All sites</option></select></div>
               <div><button class="btn-main" onclick="loadReports()">Run Report</button></div>
             </div>
             <div class="no-print" style="margin-top:12px;">
@@ -199,8 +200,8 @@
             <div class="filters no-print">
               <div><label>Start Date</label><input type="date" id="compStart"></div>
               <div><label>End Date</label><input type="date" id="compEnd"></div>
-              <div><label>Company</label><input type="text" id="compComp" placeholder="All"></div>
-              <div><label>Site</label><input type="text" id="compSite" placeholder="All"></div>
+              <div><label>Company</label><select id="compComp" class="comp-select"><option value="">All companies</option></select></div>
+              <div><label>Site</label><select id="compSite" class="site-select"><option value="">All sites</option></select></div>
               <div><button class="btn-main" onclick="loadCompliance()">Review</button></div>
             </div>
             <div id="complianceBody"><div class="muted" style="margin-top:16px;">Defaults to the last 7 days — press Review.</div></div>
@@ -218,6 +219,7 @@
       // =====================================================================
       let adminSession = null;
       let siteCoords = {};        // lowercased site name -> {lat, lng}
+      let siteNames = [];         // site names from SiteLocations, original casing, for the dropdowns
       let directory = { employees: [], replacements: [] };
       let lastReportRows = [];
 
@@ -278,7 +280,7 @@
             document.getElementById('loginView').classList.add('hidden');
             document.getElementById('appView').classList.remove('hidden');
             initDefaults();
-            loadSiteCoords();
+            loadFilterData();
             loadToday();
           } else {
             showAlert((res && res.message) || "Login failed.");
@@ -318,14 +320,54 @@
         if (tab === 'staff' && !directory.employees.length) loadDirectory();
       }
 
-      function loadSiteCoords() {
-        apiCall('getSiteLocations').then((res) => {
-          if (res && res.status === "Success") {
-            siteCoords = {};
-            (res.rows || []).forEach(r => { siteCoords[deepClean(r.site)] = { lat: r.lat, lng: r.lng }; });
-          }
-        }).catch(() => { /* distances just render as "distance unknown" */ });
+      /**
+       * Fills every filter dropdown from the data itself, so an admin picks a
+       * site instead of typing one. Sites come from the staff directory unioned
+       * with SiteLocations — a site can exist in either without the other.
+       *
+       * Values are used verbatim as the filter sent to the backend, which
+       * matters: some sheet values carry stray whitespace (one company name
+       * ends in a newline), and a typed filter could never match those. The
+       * label is trimmed for display; the value is left exactly as stored.
+       */
+      function populateFilters(employeeRows, siteRows) {
+        const collect = (values) => [...new Set(values.filter(v => v !== null && v !== undefined && String(v).trim() !== ""))]
+          .sort((a, b) => String(a).trim().localeCompare(String(b).trim()));
+
+        const sites = collect([].concat(
+          (employeeRows || []).map(r => r.site),
+          (siteRows || []).map(r => r.site)
+        ));
+        const comps = collect((employeeRows || []).map(r => r.comp));
+        const regs  = collect((employeeRows || []).map(r => r.reg));
+
+        const fill = (selector, values, allLabel) => {
+          document.querySelectorAll(selector).forEach(sel => {
+            const current = sel.value;
+            sel.innerHTML = `<option value="">${allLabel}</option>` +
+              values.map(v => `<option value="${esc(v)}">${esc(String(v).trim())}</option>`).join("");
+            if (current) sel.value = current; // keep any selection across a reload
+          });
+        };
+        fill('.site-select', sites, 'All sites');
+        fill('.comp-select', comps, 'All companies');
+        fill('.reg-select', regs, 'All regions');
       }
+
+      /** Loads the reference data the filters and compliance distances need. */
+      function loadFilterData() {
+        Promise.all([apiCall('getAllEmployees'), apiCall('getSiteLocations')])
+          .then(([emps, sites]) => {
+            const employeeRows = (emps && emps.status === "Success") ? (emps.rows || []) : [];
+            const siteRows = (sites && sites.status === "Success") ? (sites.rows || []) : [];
+            siteCoords = {};
+            siteRows.forEach(r => { siteCoords[deepClean(r.site)] = { lat: r.lat, lng: r.lng }; });
+            siteNames = siteRows.map(r => r.site);
+            populateFilters(employeeRows, siteRows);
+          })
+          .catch(() => { /* filters stay on "All"; distances render as unknown */ });
+      }
+
 
       // =====================================================================
       // STATUS / PHOTO INTERPRETATION
@@ -357,10 +399,11 @@
       // =====================================================================
       function loadToday() {
         const date = document.getElementById('todayDate').value || todayISO();
-        const comp = document.getElementById('todayComp').value.trim();
+        const comp = document.getElementById('todayComp').value;
+        const site = document.getElementById('todaySite').value;
         const host = document.getElementById('todayBody');
         host.innerHTML = '<div class="loading-msg">Loading…</div>';
-        apiCall('getAttendanceByDateRange', { startDate: date, endDate: date, comp: comp })
+        apiCall('getAttendanceByDateRange', { startDate: date, endDate: date, comp: comp, site: site })
           .then((res) => {
             if (!res || res.status !== "Success") { host.innerHTML = `<div class="err-msg">${esc((res && res.message) || "Could not load attendance.")}</div>`; return; }
             renderToday(res.rows || [], date, host);
@@ -425,9 +468,9 @@
         const endDate = document.getElementById('repEnd').value;
         if (!startDate || !endDate) return showAlert("Pick a start and end date.");
         if (startDate > endDate) return showAlert("The start date is after the end date.");
-        const comp = document.getElementById('repComp').value.trim();
-        const reg = document.getElementById('repReg').value.trim();
-        const site = document.getElementById('repSite').value.trim();
+        const comp = document.getElementById('repComp').value;
+        const reg = document.getElementById('repReg').value;
+        const site = document.getElementById('repSite').value;
         const host = document.getElementById('reportsBody');
         host.innerHTML = '<div class="loading-msg">Running…</div>';
         apiCall('getAttendanceByDateRange', { startDate, endDate, comp, reg, site })
@@ -486,6 +529,9 @@
             directory.employees = (emps && emps.status === "Success") ? (emps.rows || []) : [];
             directory.replacements = (reps && reps.status === "Success") ? (reps.rows || []) : [];
             renderDirectory();
+            // Adding staff can introduce a site or company that isn't in the
+            // dropdowns yet, so refresh them off the directory we just loaded.
+            populateFilters(directory.employees, siteNames.map(s => ({ site: s })));
           })
           .catch(() => {
             document.getElementById('empBody').innerHTML = '<div class="err-msg">Could not reach the server.</div>';
@@ -678,8 +724,8 @@
         const startDate = document.getElementById('compStart').value || daysAgoISO(7);
         const endDate = document.getElementById('compEnd').value || todayISO();
         if (startDate > endDate) return showAlert("The start date is after the end date.");
-        const comp = document.getElementById('compComp').value.trim();
-        const site = document.getElementById('compSite').value.trim();
+        const comp = document.getElementById('compComp').value;
+        const site = document.getElementById('compSite').value;
         const host = document.getElementById('complianceBody');
         host.innerHTML = '<div class="loading-msg">Loading…</div>';
         apiCall('getAttendanceByDateRange', { startDate, endDate, comp, site })
