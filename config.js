@@ -25,7 +25,7 @@
 const APPS_SCRIPT_URL_PROD = "https://script.google.com/macros/s/AKfycbzf_erZFTST-MS2LzWtT2Fy3odL5Pbvud8-jfaaWfKj52w5z-qyWRMt9OuzPMpXUjpfIg/exec";
 
 /** Staging: the copied spreadsheet. Safe to write to. */
-const APPS_SCRIPT_URL_TEST = "https://script.google.com/macros/s/AKfycbz7O37cq96uTeFeufVFl-G2FrEoCuCRoNsM4hfPVTd9m5cGsdi2Iu7UzfJUOniTA6Ho/exec";
+const APPS_SCRIPT_URL_TEST = "https://script.google.com/macros/s/AKfycbz20sPWyL_jYObFMX9AvizPYVaKWwg4gHEW07JlgchgW5dF2JSnEnwXm2ly8bozz38jrw/exec";
 
 /** The production host. Everything else is treated as staging. */
 const PROD_HOSTNAME = "hr940.github.io";
