@@ -70,7 +70,11 @@ export async function templatesRoutes(app: FastifyInstance, deps: AppDeps): Prom
     );
     upload.put<{ Params: { id: string } }>(
       '/admin/templates/:id/content',
-      { bodyLimit: TEMPLATE_MAX_BYTES },
+      {
+        bodyLimit: TEMPLATE_MAX_BYTES,
+        // Refuse anyone but an admin before the body (up to 5 MB) is read.
+        onRequest: async (req) => void requireRole(req, 'admin'),
+      },
       async (req, reply) => {
         const me = requireRole(req, 'admin');
         const id = parse(uuid, req.params.id);

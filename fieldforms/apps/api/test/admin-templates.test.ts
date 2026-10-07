@@ -483,7 +483,17 @@ describe('access', () => {
       for (const [method, url, payload] of calls)
         expect((await req(method, url, who, payload)).statusCode, `${method} ${url}`).toBe(403);
       expect((await upload(id, '<p>{{ km }}</p>', 'text/html', who)).statusCode).toBe(403);
+      // Refused before the body is read, so even an oversized one gets a 403, not a 413.
+      const big = await upload(id, `<p>${'x'.repeat(6 * 1024 * 1024)}</p>`, 'text/html', who);
+      expect(big.statusCode).toBe(403);
     }
+    const anonymous = await t.app.inject({
+      method: 'PUT',
+      url: `/api/admin/templates/${id}/content`,
+      headers: { ...H, 'content-type': 'text/html' },
+      payload: '<p>{{ km }}</p>',
+    });
+    expect(anonymous.statusCode).toBe(401);
     const versions = await t.owner
       .selectFrom('output_template_versions')
       .select('version')
