@@ -39,6 +39,11 @@ export function localToUtc(isoDate: string, hhmm: string, tz = DISPLAY_TZ): Date
   return fromZonedTime(`${isoDate}T${hhmm.slice(0, 5)}:00`, tz);
 }
 
+/** A local wall-clock "YYYY-MM-DDTHH:mm[:ss]" in DISPLAY_TZ as a UTC Date. */
+export function wallClockToUtc(localIso: string, tz = DISPLAY_TZ): Date {
+  return fromZonedTime(localIso, tz);
+}
+
 export function formatLocal(d: Date | string, pattern = 'yyyy-MM-dd HH:mm', tz = DISPLAY_TZ): string {
   return formatInTimeZone(typeof d === 'string' ? new Date(d) : d, tz, pattern);
 }
