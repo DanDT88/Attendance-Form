@@ -29,6 +29,8 @@ export interface FakeS3 {
   conditional: 'supported' | 'not-implemented' | 'bad-request';
   /** "METHOD /bucket/key" plus " if-none-match" when the header was sent. */
   log: string[];
+  /** The Content-MD5 header of each PUT, in order. */
+  md5s: (string | undefined)[];
   /** Access key ids the service does not know (InvalidAccessKeyId). */
   unknownKeys: Set<string>;
   /** Access key ids that may not list buckets (AccessDenied on ListBuckets only). */
@@ -61,6 +63,7 @@ export async function startS3Server(): Promise<FakeS3> {
     regions: new Map(),
     conditional: 'supported',
     log: [],
+    md5s: [],
     unknownKeys: new Set(),
     noListKeys: new Set(),
     failNext: (status, code, method) => void (failure = { status, code, method }),
@@ -153,11 +156,16 @@ export async function startS3Server(): Promise<FakeS3> {
           if (fake.conditional === 'bad-request') return error(req, res, 400, 'InvalidArgument');
           if (inm === '*' && objects.has(key)) return error(req, res, 412, 'PreconditionFailed');
         }
+        const body = Buffer.concat(chunks);
+        const md5 = req.headers['content-md5'] as string | undefined;
+        fake.md5s.push(md5);
+        if (md5 && md5 !== createHash('md5').update(body).digest('base64'))
+          return error(req, res, 400, 'BadDigest');
         const metadata: Record<string, string> = {};
         for (const [h, v] of Object.entries(req.headers))
           if (h.startsWith('x-amz-meta-')) metadata[h.slice(11)] = String(v);
         const o = store(
-          Buffer.concat(chunks),
+          body,
           String(req.headers['content-type'] ?? 'application/octet-stream'),
           metadata,
         );

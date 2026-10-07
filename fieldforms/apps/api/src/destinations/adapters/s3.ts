@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   HeadBucketCommand,
   HeadObjectCommand,
@@ -53,6 +54,8 @@ const NOT_ABOUT_CONDITIONS = new Set([
   'MetadataTooLarge',
   'InvalidStorageClass',
   'RequestTimeout',
+  'BadDigest',
+  'InvalidDigest',
 ]);
 
 function requireConnection(conn: OpenConnection<S3Config> | null): OpenConnection<S3Config> {
@@ -120,6 +123,8 @@ async function upload(
     ...(ctx.test ? { [META_TEST]: '1' } : {}),
   };
   const what = `PutObject s3://${bucket}/${key}`;
+  // Every S3-compatible service checks Content-MD5, and buckets with Object Lock require it.
+  const md5 = createHash('md5').update(file.data).digest('base64');
   const put = async (ifNoneMatch: boolean): Promise<Stored> => {
     const out = await client.send(
       new PutObjectCommand({
@@ -127,6 +132,7 @@ async function upload(
         Key: key,
         Body: file.data,
         ContentLength: file.data.length,
+        ContentMD5: md5,
         ContentType: file.contentType,
         Metadata: metadata,
         ...(ifNoneMatch ? { IfNoneMatch: '*' } : {}),

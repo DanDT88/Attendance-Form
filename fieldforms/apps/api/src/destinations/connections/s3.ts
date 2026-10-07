@@ -105,8 +105,8 @@ export function s3Client(conn: OpenConnection<S3Config>, env: AdapterEnv): S3Cli
     credentials: { accessKeyId, secretAccessKey },
     maxAttempts: 1,
     followRegionRedirects: false,
-    // Checksums only where the API requires them: many S3-compatible services refuse the newer
-    // default checksum headers. TLS already protects the upload.
+    // The newer checksum headers only where the API requires them: many S3-compatible services
+    // refuse them. Uploads carry Content-MD5 instead (see the adapter).
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
     requestHandler: new NodeHttpHandler({
@@ -155,6 +155,8 @@ const TRANSIENT_CODES = new Set([
   'OperationAborted',
   // Another conditional write to the same key is in progress.
   'ConditionalRequestConflict',
+  // The body did not match its Content-MD5 on the way.
+  'BadDigest',
 ]);
 
 /**

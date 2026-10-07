@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { DEFAULT_FILENAME } from '@fieldforms/shared';
@@ -24,6 +25,7 @@ beforeEach(() => {
   s3.regions.clear();
   s3.conditional = 'supported';
   s3.log.length = 0;
+  s3.md5s.length = 0;
   s3.unknownKeys.clear();
   s3.noListKeys.clear();
 });
@@ -89,6 +91,10 @@ describe('S3 adapter', () => {
       `PUT /forms/${KEY} if-none-match`,
       `PUT /forms/${photos} if-none-match`,
     ]);
+    // Content-MD5 on every upload (checked by the fake, required with Object Lock).
+    expect(s3.md5s).toEqual(
+      ['one', 'two'].map((t) => createHash('md5').update(`%PDF-1.7 ${t}`).digest('base64')),
+    );
     expect(r.target).toEqual({
       endpoint: `127.0.0.1:${s3.port}`,
       bucket: 'forms',
@@ -265,6 +271,12 @@ describe('S3 adapter', () => {
 
     s3.failNext(500, 'InternalError');
     expect((await failure(attempt(fileContext()))).permanent).toBe(false);
+
+    // A body damaged on the way is refused by its Content-MD5 and sent again later.
+    s3.failNext(400, 'BadDigest');
+    const damaged = await failure(attempt(fileContext()));
+    expect(damaged.permanent).toBe(false);
+    expect(s3.log.at(-1)).toBe(`PUT /forms/${KEY} if-none-match`);
 
     // A HEAD that fails after a 412 is retried too.
     const first = fileContext();
