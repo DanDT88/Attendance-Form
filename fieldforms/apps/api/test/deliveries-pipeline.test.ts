@@ -705,3 +705,51 @@ describe('checks and test sends (run by the worker)', () => {
     expect(after.n).toBe(before.n);
   });
 });
+
+describe('other alerts', () => {
+  it('warns once a week about connection secrets that expire within 30 days', async () => {
+    const id = await connection();
+    const soon = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+    await t.owner
+      .updateTable('connections')
+      .set({ secret_expires_on: soon })
+      .where('id', '=', id)
+      .execute();
+    mails.length = 0;
+    await runAlerts(t.db, mailer, 'https://ff.example');
+    expect(mails.filter((m) => m.subject.startsWith(`Credentials expire on ${soon}`))).toHaveLength(
+      1,
+    );
+    mails.length = 0;
+    await runAlerts(t.db, mailer, 'https://ff.example');
+    expect(mails.filter((m) => m.subject.startsWith('Credentials expire'))).toHaveLength(0);
+  });
+
+  it('marks nothing when nobody can be told', async () => {
+    await t.owner.updateTable('users').set({ active: false }).where('role', '=', 'admin').execute();
+    const dest = await destination();
+    await t.owner
+      .updateTable('destinations')
+      .set({ failing_since: new Date() })
+      .where('id', '=', dest)
+      .execute();
+    expect(await runAlerts(t.db, mailer, 'https://ff.example')).toEqual({ sent: 0, recipients: 0 });
+    const row = await t.owner
+      .selectFrom('destinations')
+      .select('incident_alerted_at')
+      .where('id', '=', dest)
+      .executeTakeFirstOrThrow();
+    expect(row.incident_alerted_at).toBeNull();
+    // Configured recipients take over from admins.
+    await t.owner
+      .insertInto('settings')
+      .values({ key: 'deliveryAlertEmails', value: JSON.stringify(['ops@acme.test']) })
+      .onConflict((oc) =>
+        oc.column('key').doUpdateSet({ value: JSON.stringify(['ops@acme.test']) }),
+      )
+      .execute();
+    mails.length = 0;
+    await runAlerts(t.db, mailer, 'https://ff.example');
+    expect(mails.some((m) => m.to.includes('ops@acme.test'))).toBe(true);
+  });
+});
