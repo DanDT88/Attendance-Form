@@ -10,7 +10,6 @@ import {
   type Format,
 } from '@fieldforms/shared';
 import type { FastifyInstance } from 'fastify';
-import { zipSync } from 'fflate';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { auditCtx, requireRole, requireUser } from '../auth/plugin.js';
@@ -455,16 +454,7 @@ export async function deliveriesRoutes(app: FastifyInstance, deps: AppDeps): Pro
       entityId: id,
       details: { format: q.format, templateId: templateId ?? null },
     });
-    const out =
-      q.format === 'images'
-        ? {
-            filename: `${stem}.zip`,
-            contentType: 'application/zip',
-            data: Buffer.from(
-              zipSync(Object.fromEntries(files.map((f) => [f.filename, new Uint8Array(f.data)]))),
-            ),
-          }
-        : files[0]!;
+    const out = q.format === 'images' ? documents.zipFiles(files, stem) : files[0]!;
     const ext =
       q.format === 'images' ? 'zip' : FORMAT_EXTENSIONS[q.format as Exclude<Format, 'images'>];
     return reply

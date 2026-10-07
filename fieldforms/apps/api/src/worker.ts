@@ -20,7 +20,7 @@ import {
 } from './queue.js';
 import { planDeliveries, sweepDeliveries } from './services/deliveries.js';
 import { runAlerts } from './services/delivery-alerts.js';
-import { runDelivery, runTest, type DocumentsApi } from './services/delivery-runner.js';
+import { runDelivery, runTest } from './services/delivery-runner.js';
 import { dispatchRecipients } from './services/dispatch.js';
 import * as documents from './services/documents.js';
 import {
@@ -137,7 +137,7 @@ const pipeline = {
   endpoints: DEFAULT_ENDPOINTS,
   emailAttachmentLimit: cfg.EMAIL_ATTACHMENT_LIMIT_MB * 1024 * 1024,
   worker: `${hostname()}:${process.pid}`,
-  documents: documents as unknown as DocumentsApi,
+  documents,
 };
 
 await boss.work<{ submissionId: string }>(PLAN_DELIVERIES, async ([job]) => {

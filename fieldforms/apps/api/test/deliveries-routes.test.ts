@@ -232,3 +232,49 @@ describe('system emails that gave up', () => {
     expect(t.enqueued).toEqual([register.id]);
   });
 });
+
+describe('document downloads', () => {
+  it('downloads JSON and PDF for people who can see the submission, and audits it', async () => {
+    const json = await req(
+      'GET',
+      `/api/form-submissions/${submissionId}/document?format=json`,
+      mgr,
+    );
+    expect(json.statusCode, json.body).toBe(200);
+    expect(json.headers['content-disposition']).toMatch(/^attachment; filename=".*\.json"/);
+    const body = JSON.parse(json.body);
+    expect(body).toMatchObject({ schema: 'fieldforms.submission/1', answers: { litres: 3 } });
+    expect(body.submission.id).toBe(submissionId);
+
+    const pdf = await req('GET', `/api/form-submissions/${submissionId}/document?format=pdf`, sup);
+    expect(pdf.statusCode, pdf.body).toBe(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect(pdf.body.startsWith('%PDF')).toBe(true);
+    expect(t.pdf.calls.at(-1)!.kind).toBe('html');
+
+    expect(
+      (await req('GET', `/api/form-submissions/${submissionId}/document?format=json`, mgrB))
+        .statusCode,
+    ).toBe(404);
+    const views = await t.owner
+      .selectFrom('audit_log')
+      .select(['action', 'entity_id'])
+      .where('action', '=', 'form.document')
+      .execute();
+    expect(views.filter((v) => v.entity_id === submissionId).length).toBe(2);
+  });
+
+  it('downloads photos as a ZIP and rejects unknown formats', async () => {
+    const zip = await req(
+      'GET',
+      `/api/form-submissions/${submissionId}/document?format=images`,
+      admin,
+    );
+    expect(zip.statusCode).toBe(200);
+    expect(zip.headers['content-type']).toBe('application/zip');
+    expect(
+      (await req('GET', `/api/form-submissions/${submissionId}/document?format=exe`, admin))
+        .statusCode,
+    ).toBe(400);
+  });
+});
