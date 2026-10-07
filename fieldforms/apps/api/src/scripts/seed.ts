@@ -1,4 +1,4 @@
-import { addDays, localDate, DEFAULT_SETTINGS } from '@fieldforms/shared';
+import { addDays, localDate, DEFAULT_SETTINGS, SITE_INSPECTION } from '@fieldforms/shared';
 import { randomUUID } from 'node:crypto';
 import { hashSecret } from '../auth/passwords.js';
 import { resolveSiteIds } from '../auth/scope.js';
@@ -330,6 +330,54 @@ async function main(db: Db) {
     'region',
     companies[0]!.regions[0]!,
   ]);
+
+  // ------------------------------------------------------------ Phase 2 demo: a form, a list, a group
+  const form = await db
+    .insertInto('forms')
+    .values({
+      name: SITE_INSPECTION.title,
+      draft_definition: JSON.stringify(SITE_INSPECTION),
+      draft_updated_by: null,
+      created_by: null,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('form_versions')
+    .values({
+      form_id: form.id,
+      version: 1,
+      definition: JSON.stringify(SITE_INSPECTION),
+      published_by: null,
+    })
+    .execute();
+  await db
+    .insertInto('option_lists')
+    .values({
+      name: 'Cleaning products',
+      items: JSON.stringify([
+        { value: 'bleach_5l', label: 'Bleach 5 l' },
+        { value: 'floor_polish', label: 'Floor polish' },
+        { value: 'hand_soap', label: 'Hand soap' },
+        { value: 'refuse_bags', label: 'Refuse bags (roll)' },
+      ]),
+      updated_by: null,
+    })
+    .execute();
+  const gauteng = companies[0]!.regions[0]!;
+  const team = await db
+    .insertInto('user_groups')
+    .values({ name: 'Gauteng supervisors' })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('user_group_members')
+    .values(
+      sites
+        .filter((x) => x.regionId === gauteng)
+        .map((x) => ({ group_id: team.id, user_id: x.supervisor })),
+    )
+    .execute();
 
   // ------------------------------------------------------------ a week of history
   const settings = DEFAULT_SETTINGS;

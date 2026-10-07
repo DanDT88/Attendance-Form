@@ -48,6 +48,8 @@ export async function myOpenDispatches(db: Db, userId: string) {
       'd.form_id',
       'd.form_version_id',
       'v.version',
+      // The task's own version, which may be older than the latest: needed to fill it in offline.
+      'v.definition',
       'f.name as form_name',
       'c.display_name as created_by_name',
       'g.name as group_name',
