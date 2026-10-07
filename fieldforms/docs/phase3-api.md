@@ -25,6 +25,11 @@ Secrets are validated with the connection driver's `secretSchema`, sealed with `
 the same request. Every change adds a `connection_revisions` row and an audit row (no secret
 values, ever).
 
+An unsaved SFTP check (`POST /api/admin/connection-checks`) accepts an empty or missing
+`hostKeySha256`, so an admin can learn the fingerprint first: the check connects, refuses to log
+in to an unpinned host and reports the presented key in `result.facts.hostKeySha256`. Saving a
+connection still requires the fingerprint.
+
 ## Destinations (admin)
 
 | Route                                            | Body / query                                                                                                                                                                                 | Returns                                                                                                                                                                                                                                                                            |
