@@ -126,8 +126,12 @@ export interface OpenConnection<Config = Record<string, unknown>> {
 }
 
 export interface AdapterResult {
-  /** `already_present`: the destination already had it (a retry after a lost reply). */
-  outcome: 'delivered' | 'already_present';
+  /**
+   * `already_present`: the destination already had it (a retry after a lost reply).
+   * `skipped`: there was nothing to send (an email with no recipient); say why in `detail`.
+   */
+  outcome: 'delivered' | 'already_present' | 'skipped';
+  detail?: string;
   /** Where it went, without secrets: recipients, URL origin and path, bucket/key, remote path. */
   target: Record<string, unknown>;
   /** What the destination said: SMTP message id, HTTP status, ETag, file id. No bodies. */

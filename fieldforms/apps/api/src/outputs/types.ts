@@ -50,6 +50,8 @@ export interface RenderContext {
   media: MediaLoader;
   pdf: PdfConverter;
   signal: AbortSignal;
+  /** e.g. "https://forms.example.co.za/api/v1", for file links in JSON and XML. */
+  apiBase: string;
 }
 
 /** Embedding limits: a document never carries more than this many images, at this size. */
