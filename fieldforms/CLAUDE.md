@@ -23,6 +23,8 @@ Read `ARCHITECTURE.md` before structural changes and keep `TASKS.md` current.
 | First admin in production                  | `docker compose run --rm -e ADMIN_EMAIL=… -e ADMIN_PASSWORD api node dist/create-admin.js`                                         |
 | Legacy import                              | `pnpm import-legacy export.xlsx` (needs `DATABASE_URL`)                                                                            |
 | Regenerate PWA icons                       | `pnpm icons`                                                                                                                       |
+| Key pair for destination secrets           | `pnpm secrets-keygen` (public key → API, private key → worker only)                                                                |
+| Re-seal secrets after a key rotation       | `pnpm rotate-secrets` (worker environment: new `SECRETS_PRIVATE_KEY`, old one as `SECRETS_PRIVATE_KEY_PREVIOUS`)                   |
 
 Tests need Postgres on `localhost:5432` with the compose credentials (override with
 `TEST_DATABASE_URL` / `E2E_DATABASE_ADMIN_URL`). Playwright uses the Chromium in
@@ -61,11 +63,36 @@ Tests need Postgres on `localhost:5432` with the compose credentials (override w
 - **The service worker imports `@fieldforms/shared/sync`, not the package root**, so zod and the
   form engine stay out of it.
 
+### Phase 3 (documents, destinations, public API)
+
+- **The `deliveries` row is the state machine and the lock.** Never send anything without first
+  claiming the row (`runDelivery` in `services/delivery-runner.ts`); pg-boss only wakes workers
+  (it does not enforce `singletonKey` on standard queues and cannot cancel a handler). Anything
+  that creates or changes a delivery enqueues its job in the same transaction (`JobQueue`
+  methods take the transaction).
+- **Secrets are sealed to the worker.** The API holds only `SECRETS_PUBLIC_KEY` and must never
+  open a secret; checks and test sends run in the worker. Never log, store, return or email a
+  secret, a third party's response body or a raw socket error: adapters throw `DeliveryError`
+  with a safe message and `redact()`ed detail. Changing a connection's binding fields clears its
+  secrets.
+- **Outbound connections to admin-configured hosts go through `lib/netguard.ts`** (guarded fetch,
+  guarded lookup, or `resolveAllowed` + connect to the IP with the TLS server name).
+- **Templates only through `lib/liquid.ts`** (never `new Liquid()`: its defaults read files and
+  escape nothing), with the escaping context of where the output goes.
+- **POPIA:** destinations get the document model after their `include` filter; never pass the
+  unfiltered submission to an adapter or template.
+- **File names carry the submission's short id** (`fileStem`), so two submissions never share a
+  name, and a file is only replaced by a retry or resend of the same delivery.
+- Parallel test runs against one Postgres need different `TEST_DB_PREFIX` values (`ffa`, `ffb`,
+  not `ff` and `ff_b`).
+
 ## Layout
 
 - `packages/shared` — zod schemas, time and compliance maths, the sync engine (`src/sync/engine.ts`),
   the expression language (`src/expr`) and form definitions and runtime (`src/forms`).
 - `apps/api` — Fastify app (`src/app.ts`), routes, services, auth; `src/worker.ts` (pg-boss jobs);
+  `src/outputs` (renderers, media, Gotenberg, templates), `src/destinations` (adapters, connection
+  drivers, naming), `src/services/deliver*.ts` (the pipeline), `src/lib` (secrets, netguard, liquid);
   `src/scripts` (seed, legacy import, create-admin); `test/` (integration, one DB per file).
 - `apps/web` — React PWA; `src/sw.ts` (service worker), `src/offline` (Dexie outbox, sync triggers),
   `src/pages`; `e2e/` Playwright.
