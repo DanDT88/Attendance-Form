@@ -153,6 +153,12 @@ describe('starter templates', () => {
           label: 'Parts {{#cost}}',
           fields: [{ id: 'part', type: 'text', label: 'Part {{_url}}' }],
         },
+        {
+          id: 'only_notes',
+          type: 'group',
+          label: 'Only notes',
+          fields: [{ id: 'hint', type: 'note', label: 'Hint' }],
+        },
       ],
     };
     for (const kind of ['docx', 'html'] as const) {

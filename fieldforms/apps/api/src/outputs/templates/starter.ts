@@ -46,7 +46,11 @@ export async function starterTemplate(
   };
 }
 
-const printed = (fields: Field[]) => fields.filter((f) => f.type !== 'note');
+/** Fields a document shows: not notes, nor groups that only hold notes. */
+const printed = (fields: Field[]) =>
+  fields.filter(
+    (f) => f.type !== 'note' && (f.type !== 'group' || f.fields.some((c) => c.type !== 'note')),
+  );
 const isPicture = (f: Field) => f.type === 'image' || f.type === 'signature';
 
 // ---------------------------------------------------------------- Word
