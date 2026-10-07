@@ -30,7 +30,12 @@ export const registerEntryInput = z.object({
   /** Local time of the event: arrival for late, departure for left early or end of shift. */
   time: hhmm.optional(),
   /** Minutes late (late arrivals only). */
-  minutesLate: z.number().int().min(1).max(24 * 60).optional(),
+  minutesLate: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .optional(),
   reason: z.string().trim().max(500).optional(),
   replacementEmployeeId: uuid.optional(),
 });
@@ -75,7 +80,11 @@ export const registerSubmissionInput = z
       }
       seen.add(e.employeeId);
       if (!allowed.includes(e.status)) {
-        ctx.addIssue({ code: 'custom', path, message: `Status ${e.status} not allowed on a ${v.kind} register` });
+        ctx.addIssue({
+          code: 'custom',
+          path,
+          message: `Status ${e.status} not allowed on a ${v.kind} register`,
+        });
       }
       if (e.status === 'late' && e.minutesLate === undefined && e.time === undefined) {
         ctx.addIssue({ code: 'custom', path, message: 'Late needs minutes late or arrival time' });
@@ -84,11 +93,19 @@ export const registerSubmissionInput = z
         ctx.addIssue({ code: 'custom', path, message: 'Left early needs the time they left' });
       }
       if (e.replacementEmployeeId && e.status !== 'absent') {
-        ctx.addIssue({ code: 'custom', path, message: 'Only absent employees can have a replacement' });
+        ctx.addIssue({
+          code: 'custom',
+          path,
+          message: 'Only absent employees can have a replacement',
+        });
       }
     });
     if ((v.kind === 'late' || v.kind === 'left_early') && v.entries.length !== 1) {
-      ctx.addIssue({ code: 'custom', path: ['entries'], message: `A ${v.kind} register is for one employee` });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['entries'],
+        message: `A ${v.kind} register is for one employee`,
+      });
     }
   });
 export type RegisterSubmissionInput = z.infer<typeof registerSubmissionInput>;
@@ -110,21 +127,32 @@ export const correctableFields = z.object({
   status: z.enum(ENTRY_STATUSES),
   event: z.enum(['in', 'out']).nullable(),
   eventAt: isoInstant.nullable(),
-  minutes: z.number().int().min(0).max(24 * 60).nullable(),
+  minutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60)
+    .nullable(),
   reason: z.string().max(500).nullable(),
   replacementEmployeeId: uuid.nullable(),
 });
 export type CorrectableFields = z.infer<typeof correctableFields>;
 
 export const correctionInput = z.object({
-  changes: correctableFields.partial().refine((c) => Object.keys(c).length > 0, 'Nothing to change'),
+  changes: correctableFields
+    .partial()
+    .refine((c) => Object.keys(c).length > 0, 'Nothing to change'),
   reason: z.string().trim().min(3, 'A reason is required').max(500),
 });
 export type CorrectionInput = z.infer<typeof correctionInput>;
 
 export const settingsSchema = z.object({
   clockSkewThresholdSeconds: z.number().int().min(10).max(86_400),
-  syncDelayFlagHours: z.number().int().min(1).max(24 * 30),
+  syncDelayFlagHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30),
   shiftGraceMinutes: z.number().int().min(0).max(720),
   defaultGeofenceMetres: z.number().int().min(10).max(100_000),
   /** BCEA requires at least 3 years from the last entry. */

@@ -44,7 +44,11 @@ export function wallClockToUtc(localIso: string, tz = DISPLAY_TZ): Date {
   return fromZonedTime(localIso, tz);
 }
 
-export function formatLocal(d: Date | string, pattern = 'yyyy-MM-dd HH:mm', tz = DISPLAY_TZ): string {
+export function formatLocal(
+  d: Date | string,
+  pattern = 'yyyy-MM-dd HH:mm',
+  tz = DISPLAY_TZ,
+): string {
   return formatInTimeZone(typeof d === 'string' ? new Date(d) : d, tz, pattern);
 }
 

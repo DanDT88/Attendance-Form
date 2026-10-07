@@ -35,7 +35,11 @@ export function deriveEntryEvent(args: {
       return { event: 'in', eventAt: at, minutes: late };
     }
     const late = entry.minutesLate ?? 0;
-    return { event: 'in', eventAt: new Date(window.start.getTime() + late * MS_PER_MIN), minutes: late };
+    return {
+      event: 'in',
+      eventAt: new Date(window.start.getTime() + late * MS_PER_MIN),
+      minutes: late,
+    };
   }
 
   if (entry.status === 'left_early') {

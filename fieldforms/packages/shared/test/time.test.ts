@@ -53,15 +53,23 @@ describe('shifts', () => {
 
   it('resolves night-shift times to the nearer day', () => {
     // Leaving at 05:30 is the next morning.
-    expect(resolveShiftTime('2026-10-06', '05:30', night).toISOString()).toBe('2026-10-07T03:30:00.000Z');
+    expect(resolveShiftTime('2026-10-06', '05:30', night).toISOString()).toBe(
+      '2026-10-07T03:30:00.000Z',
+    );
     // Arriving 15 minutes early stays on the work date.
-    expect(resolveShiftTime('2026-10-06', '17:45', night).toISOString()).toBe('2026-10-06T15:45:00.000Z');
+    expect(resolveShiftTime('2026-10-06', '17:45', night).toISOString()).toBe(
+      '2026-10-06T15:45:00.000Z',
+    );
     // Late arrival just after midnight is the next calendar day.
-    expect(resolveShiftTime('2026-10-06', '00:20', night).toISOString()).toBe('2026-10-06T22:20:00.000Z');
+    expect(resolveShiftTime('2026-10-06', '00:20', night).toISOString()).toBe(
+      '2026-10-06T22:20:00.000Z',
+    );
   });
 
   it('never moves a day-shift time to another day', () => {
-    expect(resolveShiftTime('2026-10-06', '01:00', day).toISOString()).toBe('2026-10-05T23:00:00.000Z');
+    expect(resolveShiftTime('2026-10-06', '01:00', day).toISOString()).toBe(
+      '2026-10-05T23:00:00.000Z',
+    );
   });
 
   it('defaults a night-shift close-out after midnight to the previous work date', () => {

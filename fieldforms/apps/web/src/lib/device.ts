@@ -15,7 +15,9 @@ export async function compressPhoto(file: Blob, maxSide = 1600, quality = 0.75):
   if (!ctx) return file;
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
-  const out = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+  const out = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', quality),
+  );
   return out ?? file;
 }
 
@@ -34,7 +36,12 @@ export function readLocationOnce(timeoutMs = 10_000): Promise<Fix | null> {
   if (!('geolocation' in navigator)) return Promise.resolve(null);
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy ?? null }),
+      (p) =>
+        resolve({
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+          accuracy: p.coords.accuracy ?? null,
+        }),
       () => resolve(null),
       { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 },
     );

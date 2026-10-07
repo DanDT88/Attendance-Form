@@ -10,7 +10,12 @@ import { audit } from '../services/audit.js';
 import { getBlobForUser, putBlob } from '../services/blobs.js';
 import { addCorrection } from '../services/corrections.js';
 import { toCsv, toXlsx } from '../services/export.js';
-import { createManualEvent, createRegister, getRegister, listRegisters } from '../services/registers.js';
+import {
+  createManualEvent,
+  createRegister,
+  getRegister,
+  listRegisters,
+} from '../services/registers.js';
 import { dailyReport, type ReportFilter } from '../services/report.js';
 import { getSettings } from '../services/settings.js';
 
@@ -28,8 +33,10 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
 
   // Photos arrive as raw bytes so the device can retry a single PUT without multipart framing.
   for (const type of ['image/jpeg', 'image/png', 'image/webp', 'application/octet-stream']) {
-    app.addContentTypeParser(type, { parseAs: 'buffer', bodyLimit: cfg.MAX_PHOTO_BYTES }, (_req, body, done) =>
-      done(null, body),
+    app.addContentTypeParser(
+      type,
+      { parseAs: 'buffer', bodyLimit: cfg.MAX_PHOTO_BYTES },
+      (_req, body, done) => done(null, body),
     );
   }
 
@@ -43,13 +50,30 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
       .selectFrom('sites as s')
       .innerJoin('regions as r', 'r.id', 's.region_id')
       .innerJoin('companies as c', 'c.id', 'r.company_id')
-      .select(['s.id', 's.name', 's.lat', 's.lng', 's.geofence_metres', 's.region_id', 'r.name as region_name', 'c.id as company_id', 'c.name as company_name'])
+      .select([
+        's.id',
+        's.name',
+        's.lat',
+        's.lng',
+        's.geofence_metres',
+        's.region_id',
+        'r.name as region_name',
+        'c.id as company_id',
+        'c.name as company_name',
+      ])
       .where('s.deactivated_at', 'is', null)
       .orderBy('c.name')
       .orderBy('r.name')
       .orderBy('s.name');
     if (user.siteIds !== null) {
-      if (!user.siteIds.length) return { sites: [], shifts: [], employees: [], pool: [], generatedAt: new Date().toISOString() };
+      if (!user.siteIds.length)
+        return {
+          sites: [],
+          shifts: [],
+          employees: [],
+          pool: [],
+          generatedAt: new Date().toISOString(),
+        };
       sitesQ = sitesQ.where('s.id', 'in', user.siteIds);
     }
     const sites = await sitesQ.execute();
@@ -88,7 +112,11 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
       generatedAt: new Date().toISOString(),
       settings: { shiftGraceMinutes: settings.shiftGraceMinutes },
       sites,
-      shifts: shifts.map((s) => ({ ...s, start_time: s.start_time.slice(0, 5), end_time: s.end_time.slice(0, 5) })),
+      shifts: shifts.map((s) => ({
+        ...s,
+        start_time: s.start_time.slice(0, 5),
+        end_time: s.end_time.slice(0, 5),
+      })),
       employees,
       pool,
     };
@@ -117,7 +145,11 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
   app.post('/registers', async (req, reply) => {
     const user = requireUser(req);
     const settings = await getSettings(db);
-    const result = await createRegister(db, user, req.body, { settings, queue, ctx: auditCtx(req) });
+    const result = await createRegister(db, user, req.body, {
+      settings,
+      queue,
+      ctx: auditCtx(req),
+    });
     return reply.code(result.duplicate ? 200 : 201).send(result);
   });
 
@@ -125,7 +157,11 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
     const user = requireUser(req);
     const today = localDate(new Date());
     const q = parse(
-      z.object({ from: isoDate.default(today), to: isoDate.default(today), siteId: uuid.optional() }),
+      z.object({
+        from: isoDate.default(today),
+        to: isoDate.default(today),
+        siteId: uuid.optional(),
+      }),
       req.query,
     );
     return listRegisters(db, user, q);
@@ -135,7 +171,11 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
     const user = requireUser(req);
     const id = parse(uuid, req.params.id);
     const result = await getRegister(db, user, id);
-    await audit(db, auditCtx(req), { action: 'attendance.view', entity: 'register_submission', entityId: id });
+    await audit(db, auditCtx(req), {
+      action: 'attendance.view',
+      entity: 'register_submission',
+      entityId: id,
+    });
     return result;
   });
 
@@ -150,7 +190,9 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
     return reply.code(201).send(await addCorrection(db, user, id, req.body, auditCtx(req)));
   });
 
-  async function runReport(req: import('fastify').FastifyRequest): Promise<{ filter: ReportFilter; rows: Awaited<ReturnType<typeof dailyReport>> }> {
+  async function runReport(
+    req: import('fastify').FastifyRequest,
+  ): Promise<{ filter: ReportFilter; rows: Awaited<ReturnType<typeof dailyReport>> }> {
     const user = requireRole(req, 'manager', 'admin');
     const filter = parse(reportQuery, req.query);
     if (filter.siteId) assertSite(user, filter.siteId);
@@ -159,33 +201,52 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
 
   app.get('/reports/daily', async (req) => {
     const { filter, rows } = await runReport(req);
-    await audit(db, auditCtx(req), { action: 'attendance.report_view', entity: 'report', details: { ...filter, rows: rows.length } });
+    await audit(db, auditCtx(req), {
+      action: 'attendance.report_view',
+      entity: 'report',
+      details: { ...filter, rows: rows.length },
+    });
     return { filter, rows };
   });
 
   app.get('/reports/daily/export.csv', async (req, reply) => {
     const { filter, rows } = await runReport(req);
-    await audit(db, auditCtx(req), { action: 'attendance.export', entity: 'report', details: { ...filter, format: 'csv', rows: rows.length } });
+    await audit(db, auditCtx(req), {
+      action: 'attendance.export',
+      entity: 'report',
+      details: { ...filter, format: 'csv', rows: rows.length },
+    });
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
-      .header('content-disposition', `attachment; filename="attendance_${filter.from}_${filter.to}.csv"`)
+      .header(
+        'content-disposition',
+        `attachment; filename="attendance_${filter.from}_${filter.to}.csv"`,
+      )
       .send(toCsv(rows));
   });
 
   app.get('/reports/daily/export.xlsx', async (req, reply) => {
     const { filter, rows } = await runReport(req);
-    await audit(db, auditCtx(req), { action: 'attendance.export', entity: 'report', details: { ...filter, format: 'xlsx', rows: rows.length } });
+    await audit(db, auditCtx(req), {
+      action: 'attendance.export',
+      entity: 'report',
+      details: { ...filter, format: 'xlsx', rows: rows.length },
+    });
     const buf = await toXlsx(rows, `Daily attendance ${filter.from} to ${filter.to}`);
     return reply
       .header('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      .header('content-disposition', `attachment; filename="attendance_${filter.from}_${filter.to}.xlsx"`)
+      .header(
+        'content-disposition',
+        `attachment; filename="attendance_${filter.from}_${filter.to}.xlsx"`,
+      )
       .send(buf);
   });
 
   /** Organisation tree for filters and pickers, limited to the user's scope. */
   app.get('/meta/org', async (req) => {
     const user = requireUser(req);
-    if (user.siteIds !== null && !user.siteIds.length) return { companies: [], regions: [], sites: [], shifts: [] };
+    if (user.siteIds !== null && !user.siteIds.length)
+      return { companies: [], regions: [], sites: [], shifts: [] };
     const scope = user.siteIds;
     const sites = await db
       .selectFrom('sites')
@@ -195,17 +256,37 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
       .execute();
     const regionIds = [...new Set(sites.map((s) => s.region_id))];
     const regions = regionIds.length
-      ? await db.selectFrom('regions').select(['id', 'name', 'company_id']).where('id', 'in', regionIds).orderBy('name').execute()
+      ? await db
+          .selectFrom('regions')
+          .select(['id', 'name', 'company_id'])
+          .where('id', 'in', regionIds)
+          .orderBy('name')
+          .execute()
       : [];
     const companyIds = [...new Set(regions.map((r) => r.company_id))];
     const companies = companyIds.length
-      ? await db.selectFrom('companies').select(['id', 'name']).where('id', 'in', companyIds).orderBy('name').execute()
+      ? await db
+          .selectFrom('companies')
+          .select(['id', 'name'])
+          .where('id', 'in', companyIds)
+          .orderBy('name')
+          .execute()
       : [];
     const shifts = sites.length
       ? await db
           .selectFrom('shifts')
-          .select(['id', 'site_id', 'name', sql<string>`to_char(start_time, 'HH24:MI')`.as('start_time'), sql<string>`to_char(end_time, 'HH24:MI')`.as('end_time')])
-          .where('site_id', 'in', sites.map((s) => s.id))
+          .select([
+            'id',
+            'site_id',
+            'name',
+            sql<string>`to_char(start_time, 'HH24:MI')`.as('start_time'),
+            sql<string>`to_char(end_time, 'HH24:MI')`.as('end_time'),
+          ])
+          .where(
+            'site_id',
+            'in',
+            sites.map((s) => s.id),
+          )
           .execute()
       : [];
     return { companies, regions, sites, shifts };

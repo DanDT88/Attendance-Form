@@ -1,7 +1,14 @@
 import 'fake-indexeddb/auto';
 import { runSync, type SyncTransport, type TransportResult } from '@fieldforms/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { cacheSet, currentOwnerId, dexieOutboxStore, enqueue, FieldFormsDb, requeue } from '../src/offline/db';
+import {
+  cacheSet,
+  currentOwnerId,
+  dexieOutboxStore,
+  enqueue,
+  FieldFormsDb,
+  requeue,
+} from '../src/offline/db';
 
 let db: FieldFormsDb;
 let n = 0;
@@ -10,7 +17,11 @@ beforeEach(async () => {
   await db.open();
 });
 
-const photo = (id: string) => ({ id, data: new Blob([new Uint8Array([0xff, 0xd8, 0xff])]), contentType: 'image/jpeg' });
+const photo = (id: string) => ({
+  id,
+  data: new Blob([new Uint8Array([0xff, 0xd8, 0xff])]),
+  contentType: 'image/jpeg',
+});
 
 function server(script: (TransportResult | 'throw')[] = []) {
   const stored = new Map<string, unknown>();
@@ -37,7 +48,11 @@ function server(script: (TransportResult | 'throw')[] = []) {
 
 describe('IndexedDB outbox store', () => {
   it('saves a register and its photos together and syncs them with the shared engine', async () => {
-    await enqueue({ id: 'r1', type: 'register', label: 'x', ownerId: 'u1', payload: { id: 'r1' } }, [photo('p1'), photo('p2')], db);
+    await enqueue(
+      { id: 'r1', type: 'register', label: 'x', ownerId: 'u1', payload: { id: 'r1' } },
+      [photo('p1'), photo('p2')],
+      db,
+    );
     expect(await db.blobs.count()).toBe(2);
 
     const s = server();
@@ -52,18 +67,32 @@ describe('IndexedDB outbox store', () => {
 
   it('rolls back the whole capture if any part fails to save', async () => {
     await enqueue({ id: 'dup', type: 'register', label: 'x', ownerId: 'u1', payload: {} }, [], db);
-    await expect(enqueue({ id: 'dup', type: 'register', label: 'x', ownerId: 'u1', payload: {} }, [photo('orphan')], db)).rejects.toThrow();
+    await expect(
+      enqueue(
+        { id: 'dup', type: 'register', label: 'x', ownerId: 'u1', payload: {} },
+        [photo('orphan')],
+        db,
+      ),
+    ).rejects.toThrow();
     expect(await db.blobs.get('orphan')).toBeUndefined();
   });
 
   it('survives going offline: keeps the item, backs off, then sends it once', async () => {
-    await enqueue({ id: 'r1', type: 'register', label: 'x', ownerId: 'u1', payload: { id: 'r1' } }, [], db);
+    await enqueue(
+      { id: 'r1', type: 'register', label: 'x', ownerId: 'u1', payload: { id: 'r1' } },
+      [],
+      db,
+    );
     const s = server(['throw']);
     let now = 1_000;
     const store = dexieOutboxStore('u1', db);
 
     await runSync({ store, transport: s, now: () => now, random: () => 0 });
-    expect(await db.outbox.get('r1')).toMatchObject({ status: 'pending', attempts: 1, lastError: 'Failed to fetch' });
+    expect(await db.outbox.get('r1')).toMatchObject({
+      status: 'pending',
+      attempts: 1,
+      lastError: 'Failed to fetch',
+    });
 
     now += 60_000;
     await runSync({ store, transport: s, now: () => now });
@@ -73,7 +102,11 @@ describe('IndexedDB outbox store', () => {
 
   it('only sends items captured by the signed-in user', async () => {
     await enqueue({ id: 'mine', type: 'register', label: 'x', ownerId: 'u1', payload: {} }, [], db);
-    await enqueue({ id: 'theirs', type: 'register', label: 'x', ownerId: 'u2', payload: {} }, [], db);
+    await enqueue(
+      { id: 'theirs', type: 'register', label: 'x', ownerId: 'u2', payload: {} },
+      [],
+      db,
+    );
     const s = server();
     await runSync({ store: dexieOutboxStore('u1', db), transport: s });
     expect([...s.stored.keys()]).toEqual(['mine']);
@@ -85,7 +118,10 @@ describe('IndexedDB outbox store', () => {
     await enqueue({ id: 'b', type: 'register', label: 'x', ownerId: 'u1', payload: {} }, [], db);
     const s = server([{ ok: false, kind: 'auth', message: 'signed out' }]);
     await runSync({ store: dexieOutboxStore('u1', db), transport: s });
-    expect((await db.outbox.toArray()).map((i) => i.status)).toEqual(['auth_required', 'auth_required']);
+    expect((await db.outbox.toArray()).map((i) => i.status)).toEqual([
+      'auth_required',
+      'auth_required',
+    ]);
 
     expect(await requeue((i) => i.status === 'auth_required', db)).toBe(2);
     await runSync({ store: dexieOutboxStore('u1', db), transport: s });

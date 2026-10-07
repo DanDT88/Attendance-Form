@@ -14,7 +14,10 @@ export function isNetworkError(err: unknown): boolean {
   return err instanceof TypeError || (err instanceof ApiError && err.status === 0);
 }
 
-export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T>(
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<T> {
   const method = init.method ?? 'GET';
   const res = await fetch(`/api${path}`, {
     method,
@@ -56,7 +59,27 @@ export interface Bootstrap {
     company_id: string;
     company_name: string;
   }[];
-  shifts: { id: string; site_id: string; name: string; kind: 'day' | 'night'; start_time: string; end_time: string }[];
-  employees: { id: string; employee_no: string; first_name: string; last_name: string; title: string | null; site_id: string }[];
-  pool: { id: string; employee_no: string; first_name: string; last_name: string; pool_region_id: string }[];
+  shifts: {
+    id: string;
+    site_id: string;
+    name: string;
+    kind: 'day' | 'night';
+    start_time: string;
+    end_time: string;
+  }[];
+  employees: {
+    id: string;
+    employee_no: string;
+    first_name: string;
+    last_name: string;
+    title: string | null;
+    site_id: string;
+  }[];
+  pool: {
+    id: string;
+    employee_no: string;
+    first_name: string;
+    last_name: string;
+    pool_region_id: string;
+  }[];
 }

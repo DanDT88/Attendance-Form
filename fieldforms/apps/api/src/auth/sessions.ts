@@ -40,7 +40,11 @@ export interface SessionUser {
 }
 
 /** Looks up a session, rejecting expired sessions and deactivated users; slides the expiry. */
-export async function readSession(db: Db, token: string, days: number): Promise<SessionUser | null> {
+export async function readSession(
+  db: Db,
+  token: string,
+  days: number,
+): Promise<SessionUser | null> {
   const tokenHash = hashToken(token);
   const row = await db
     .selectFrom('sessions')
@@ -72,7 +76,13 @@ export async function readSession(db: Db, token: string, days: number): Promise<
       .where('token_hash', '=', tokenHash)
       .execute();
   }
-  return { userId: row.user_id, role: row.role, displayName: row.display_name, expiresAt, refreshed };
+  return {
+    userId: row.user_id,
+    role: row.role,
+    displayName: row.display_name,
+    expiresAt,
+    refreshed,
+  };
 }
 
 export async function deleteSession(db: Db, token: string): Promise<void> {

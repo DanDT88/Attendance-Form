@@ -4,7 +4,12 @@ import { loadConfig } from './config.js';
 import { createDb } from './db/index.js';
 import { createBlobStore } from './lib/blobstore.js';
 import { bossQueue, createBoss, ensureQueue, REGISTER_NOTIFY } from './queue.js';
-import { deliverRegisterSummary, findUndelivered, gotenbergRenderer, type Mailer } from './services/notify.js';
+import {
+  deliverRegisterSummary,
+  findUndelivered,
+  gotenbergRenderer,
+  type Mailer,
+} from './services/notify.js';
 
 /**
  * Background jobs: emails each start/end register summary (with PDF) to its site's recipients,
@@ -31,7 +36,13 @@ const transport = nodemailer.createTransport({
 });
 const mailer: Mailer = {
   async send(msg) {
-    await transport.sendMail({ from: mailEnv.MAIL_FROM, to: msg.to, subject: msg.subject, html: msg.html, attachments: msg.attachments });
+    await transport.sendMail({
+      from: mailEnv.MAIL_FROM,
+      to: msg.to,
+      subject: msg.subject,
+      html: msg.html,
+      attachments: msg.attachments,
+    });
   },
 };
 

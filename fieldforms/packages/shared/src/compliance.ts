@@ -7,7 +7,8 @@ export function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: 
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
   const a =
-    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -38,8 +39,7 @@ export function checkShiftTime(
   graceMinutes: number,
 ): boolean | null {
   if (!shift) return null;
-  const anchor =
-    kind === 'start' ? shift.startTime : kind === 'end' ? shift.endTime : null;
+  const anchor = kind === 'start' ? shift.startTime : kind === 'end' ? shift.endTime : null;
   const anchorMins = timeToMinutes(anchor);
   const captured = timeToMinutes(localTime(capturedAt));
   if (anchorMins === null || captured === null) return null;

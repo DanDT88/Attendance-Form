@@ -26,15 +26,21 @@ try {
   const r = await importLegacy(db, wb, blobs);
   console.log('Legacy import reconciliation');
   console.log(`  Attendance rows read:     ${r.rowsRead}`);
-  console.log(`  Registers imported:       ${r.registersImported} (+${r.endRegistersImported} end-of-shift)`);
+  console.log(
+    `  Registers imported:       ${r.registersImported} (+${r.endRegistersImported} end-of-shift)`,
+  );
   console.log(`  Registers already there:  ${r.registersSkipped}`);
   console.log(`  Attendance entries:       ${r.entriesImported}`);
   console.log(`  Photos imported:          ${r.photosImported}`);
-  console.log(`  Created: ${r.companiesCreated} companies, ${r.regionsCreated} regions, ${r.sitesCreated} sites, ${r.shiftsCreated} shifts, ${r.employeesCreated} employees`);
+  console.log(
+    `  Created: ${r.companiesCreated} companies, ${r.regionsCreated} regions, ${r.sitesCreated} sites, ${r.shiftsCreated} shifts, ${r.employeesCreated} employees`,
+  );
   console.log(`  Rejected rows:            ${r.rejected.length}`);
   for (const x of r.rejected.slice(0, 200)) console.log(`    ${x.sheet} row ${x.row}: ${x.reason}`);
   if (r.rejected.length > 200) console.log(`    … and ${r.rejected.length - 200} more`);
-  console.log('Users and AdminUsers were not imported (plain-text passwords). Create accounts and PINs in Admin.');
+  console.log(
+    'Users and AdminUsers were not imported (plain-text passwords). Create accounts and PINs in Admin.',
+  );
 } finally {
   await db.destroy();
 }

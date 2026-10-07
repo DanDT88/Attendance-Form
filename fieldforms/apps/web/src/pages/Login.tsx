@@ -23,14 +23,24 @@ export function LoginPage() {
     setError(null);
     try {
       if (mode === 'pin') {
-        await api('/auth/pin', { method: 'POST', body: { employeeNo: f.get('employeeNo'), pin: f.get('pin') } });
+        await api('/auth/pin', {
+          method: 'POST',
+          body: { employeeNo: f.get('employeeNo'), pin: f.get('pin') },
+        });
       } else {
-        await api('/auth/password', { method: 'POST', body: { email: f.get('email'), password: f.get('password') } });
+        await api('/auth/password', {
+          method: 'POST',
+          body: { email: f.get('email'), password: f.get('password') },
+        });
       }
       await refresh();
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No connection. You need signal to sign in the first time.');
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'No connection. You need signal to sign in the first time.',
+      );
     } finally {
       setBusy(false);
     }
@@ -53,11 +63,23 @@ export function LoginPage() {
           <>
             <label>
               Employee number
-              <input name="employeeNo" autoComplete="username" required autoCapitalize="characters" />
+              <input
+                name="employeeNo"
+                autoComplete="username"
+                required
+                autoCapitalize="characters"
+              />
             </label>
             <label>
               PIN
-              <input name="pin" type="password" inputMode="numeric" autoComplete="current-password" required maxLength={6} />
+              <input
+                name="pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="current-password"
+                required
+                maxLength={6}
+              />
             </label>
           </>
         ) : (

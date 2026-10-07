@@ -26,8 +26,17 @@ export function retentionEndsOn(lastEntry: string, years: number): string {
 }
 
 /** POPIA access request: everything held about an employee, as JSON. */
-export async function subjectAccessExport(db: Db, user: AuthUser, employeeId: string, ctx: AuditContext) {
-  const employee = await db.selectFrom('employees').selectAll().where('id', '=', employeeId).executeTakeFirst();
+export async function subjectAccessExport(
+  db: Db,
+  user: AuthUser,
+  employeeId: string,
+  ctx: AuditContext,
+) {
+  const employee = await db
+    .selectFrom('employees')
+    .selectAll()
+    .where('id', '=', employeeId)
+    .executeTakeFirst();
   if (!employee) throw notFound('Employee not found');
   const entries = await db
     .selectFrom('attendance_entries_effective as e')
@@ -44,7 +53,12 @@ export async function subjectAccessExport(db: Db, user: AuthUser, employeeId: st
       'e.reason',
       'e.corrected',
     ])
-    .where((eb) => eb.or([eb('e.employee_id', '=', employeeId), eb('e.replacement_employee_id', '=', employeeId)]))
+    .where((eb) =>
+      eb.or([
+        eb('e.employee_id', '=', employeeId),
+        eb('e.replacement_employee_id', '=', employeeId),
+      ]),
+    )
     .orderBy('r.work_date')
     .execute();
   const corrections = await db
@@ -57,9 +71,19 @@ export async function subjectAccessExport(db: Db, user: AuthUser, employeeId: st
   await db.transaction().execute(async (trx) => {
     await trx
       .insertInto('privacy_requests')
-      .values({ employee_id: employeeId, kind: 'access', status: 'completed', requested_by: user.id, decision_reason: null })
+      .values({
+        employee_id: employeeId,
+        kind: 'access',
+        status: 'completed',
+        requested_by: user.id,
+        decision_reason: null,
+      })
       .execute();
-    await audit(trx, ctx, { action: 'privacy.access_export', entity: 'employee', entityId: employeeId });
+    await audit(trx, ctx, {
+      action: 'privacy.access_export',
+      entity: 'employee',
+      entityId: employeeId,
+    });
   });
 
   return {
@@ -90,7 +114,11 @@ export async function requestDeletion(
   ctx: AuditContext,
   today = localDate(new Date()),
 ): Promise<{ status: 'completed' | 'refused'; reason: string }> {
-  const employee = await db.selectFrom('employees').select(['id', 'anonymised_at']).where('id', '=', employeeId).executeTakeFirst();
+  const employee = await db
+    .selectFrom('employees')
+    .select(['id', 'anonymised_at'])
+    .where('id', '=', employeeId)
+    .executeTakeFirst();
   if (!employee) throw notFound('Employee not found');
   const settings = await getSettings(db);
   const last = await lastEntryDate(db, employeeId);
@@ -105,7 +133,9 @@ export async function requestDeletion(
       `Attendance must be retained for ${settings.attendanceRetentionYears} years from the last entry (${last}) ` +
       `under the BCEA; eligible from ${retentionEndsOn(last, settings.attendanceRetentionYears)}.`;
   } else {
-    reason = last ? `Retention ended (last entry ${last}); personal fields anonymised.` : 'No attendance held; anonymised.';
+    reason = last
+      ? `Retention ended (last entry ${last}); personal fields anonymised.`
+      : 'No attendance held; anonymised.';
   }
 
   await db.transaction().execute(async (trx) => {
@@ -126,7 +156,13 @@ export async function requestDeletion(
     }
     await trx
       .insertInto('privacy_requests')
-      .values({ employee_id: employeeId, kind: 'deletion', status, requested_by: user.id, decision_reason: reason })
+      .values({
+        employee_id: employeeId,
+        kind: 'deletion',
+        status,
+        requested_by: user.id,
+        decision_reason: reason,
+      })
       .execute();
     await audit(trx, ctx, {
       action: `privacy.deletion_${status}`,
@@ -152,7 +188,10 @@ export async function retentionReview(db: Db, today = localDate(new Date())) {
   return {
     retentionYears: settings.attendanceRetentionYears,
     employees: rows.rows
-      .map((r) => ({ ...r, eligibleFrom: retentionEndsOn(r.last_entry, settings.attendanceRetentionYears) }))
+      .map((r) => ({
+        ...r,
+        eligibleFrom: retentionEndsOn(r.last_entry, settings.attendanceRetentionYears),
+      }))
       .filter((r) => r.eligibleFrom <= today),
   };
 }

@@ -1,5 +1,6 @@
 /** The e2e run gets its own database, rebuilt from scratch (migrate + seed) each run. */
-export const E2E_ADMIN_URL = process.env.E2E_DATABASE_ADMIN_URL ?? 'postgres://fieldforms:devpassword@localhost:5432/postgres';
+export const E2E_ADMIN_URL =
+  process.env.E2E_DATABASE_ADMIN_URL ?? 'postgres://fieldforms:devpassword@localhost:5432/postgres';
 export const E2E_DB = 'fieldforms_e2e';
 // The fieldforms_app role is cluster-wide: use the developer's password so an e2e run does not
 // lock out an API already running against this Postgres.

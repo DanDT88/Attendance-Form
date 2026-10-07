@@ -24,7 +24,11 @@ if (problem) {
 const { db } = createDb(url);
 try {
   const passwordHash = await hashSecret(password);
-  const existing = await db.selectFrom('users').select(['id', 'role']).where('email', '=', email).executeTakeFirst();
+  const existing = await db
+    .selectFrom('users')
+    .select(['id', 'role'])
+    .where('email', '=', email)
+    .executeTakeFirst();
   if (existing && existing.role !== 'admin') {
     console.error(`${email} exists as a ${existing.role}; refusing to change it into an admin.`);
     process.exit(1);
@@ -33,7 +37,12 @@ try {
     ? (
         await db
           .updateTable('users')
-          .set({ password_hash: passwordHash, active: true, failed_attempts: 0, locked_until: null })
+          .set({
+            password_hash: passwordHash,
+            active: true,
+            failed_attempts: 0,
+            locked_until: null,
+          })
           .where('id', '=', existing.id)
           .returning('id')
           .executeTakeFirstOrThrow()
@@ -42,13 +51,29 @@ try {
         await db
           .insertInto('users')
           .values({
-            role: 'admin', display_name: name, email, employee_no: null, pin_hash: null, password_hash: passwordHash,
-            oidc_issuer: null, oidc_subject: null, locked_until: null, last_login_at: null,
+            role: 'admin',
+            display_name: name,
+            email,
+            employee_no: null,
+            pin_hash: null,
+            password_hash: passwordHash,
+            oidc_issuer: null,
+            oidc_subject: null,
+            locked_until: null,
+            last_login_at: null,
           })
           .returning('id')
           .executeTakeFirstOrThrow()
       ).id;
-  await audit(db, { actorUserId: null }, { action: existing ? 'admin.user.password_reset_cli' : 'admin.user.create_cli', entity: 'user', entityId: id });
+  await audit(
+    db,
+    { actorUserId: null },
+    {
+      action: existing ? 'admin.user.password_reset_cli' : 'admin.user.create_cli',
+      entity: 'user',
+      entityId: id,
+    },
+  );
   console.log(`${existing ? 'Reset password for' : 'Created'} admin ${email}`);
 } finally {
   await db.destroy();

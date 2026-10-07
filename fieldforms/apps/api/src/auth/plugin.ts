@@ -16,7 +16,12 @@ declare module 'fastify' {
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export const CSRF_HEADER = 'x-fieldforms';
 
-export function setSessionCookie(reply: FastifyReply, cfg: Config, token: string, expiresAt: Date): void {
+export function setSessionCookie(
+  reply: FastifyReply,
+  cfg: Config,
+  token: string,
+  expiresAt: Date,
+): void {
   reply.setCookie(SESSION_COOKIE, token, {
     path: '/',
     httpOnly: true,
@@ -27,7 +32,12 @@ export function setSessionCookie(reply: FastifyReply, cfg: Config, token: string
 }
 
 export function clearSessionCookie(reply: FastifyReply, cfg: Config): void {
-  reply.clearCookie(SESSION_COOKIE, { path: '/', httpOnly: true, sameSite: 'lax', secure: cfg.COOKIE_SECURE });
+  reply.clearCookie(SESSION_COOKIE, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: cfg.COOKIE_SECURE,
+  });
 }
 
 /**

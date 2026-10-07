@@ -61,10 +61,15 @@ export async function addCorrection(
     throw badRequest('Only absent employees can have a replacement');
   }
   if (newValues.replacementEmployeeId) {
-    const rep = await db.selectFrom('employees').select('id').where('id', '=', newValues.replacementEmployeeId).executeTakeFirst();
+    const rep = await db
+      .selectFrom('employees')
+      .select('id')
+      .where('id', '=', newValues.replacementEmployeeId)
+      .executeTakeFirst();
     if (!rep) throw badRequest('Unknown replacement employee');
   }
-  if (JSON.stringify(newValues) === JSON.stringify(oldValues)) throw badRequest('Nothing would change');
+  if (JSON.stringify(newValues) === JSON.stringify(oldValues))
+    throw badRequest('Nothing would change');
 
   const id = await db.transaction().execute(async (trx) => {
     const row = await trx

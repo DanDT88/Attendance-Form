@@ -48,7 +48,8 @@ export function dexieOutboxStore(ownerId: string, db: FieldFormsDb = localDb): O
           .filter(
             (i) =>
               i.ownerId === ownerId &&
-              ((i.status === 'pending' && i.nextAttemptAt <= now) || (i.status === 'syncing' && i.leaseUntil < now)),
+              ((i.status === 'pending' && i.nextAttemptAt <= now) ||
+                (i.status === 'syncing' && i.leaseUntil < now)),
           )
           .toArray();
         due.sort((a, b) => a.createdAt - b.createdAt);
@@ -96,10 +97,14 @@ export async function enqueue(
 }
 
 /** Lets items parked by a sign-out, or rejected ones the user chose to retry, go again. */
-export async function requeue(where: (i: OutboxItem) => boolean, db: FieldFormsDb = localDb): Promise<number> {
+export async function requeue(
+  where: (i: OutboxItem) => boolean,
+  db: FieldFormsDb = localDb,
+): Promise<number> {
   return db.transaction('rw', db.outbox, async () => {
     const items = await db.outbox.filter(where).toArray();
-    for (const i of items) await db.outbox.update(i.id, { status: 'pending', nextAttemptAt: 0, leaseUntil: 0 });
+    for (const i of items)
+      await db.outbox.update(i.id, { status: 'pending', nextAttemptAt: 0, leaseUntil: 0 });
     return items.length;
   });
 }
@@ -108,7 +113,11 @@ export async function cacheGet<T>(key: string, db: FieldFormsDb = localDb): Prom
   return (await db.cache.get(key))?.value as T | undefined;
 }
 
-export async function cacheSet(key: string, value: unknown, db: FieldFormsDb = localDb): Promise<void> {
+export async function cacheSet(
+  key: string,
+  value: unknown,
+  db: FieldFormsDb = localDb,
+): Promise<void> {
   await db.cache.put({ key, value, savedAt: Date.now() });
 }
 
@@ -118,7 +127,10 @@ export async function currentOwnerId(db: FieldFormsDb = localDb): Promise<string
 }
 
 /** Synced items are kept for a while so the supervisor can see what went through, then pruned. */
-export async function pruneSynced(olderThanMs = 7 * 86_400_000, db: FieldFormsDb = localDb): Promise<void> {
+export async function pruneSynced(
+  olderThanMs = 7 * 86_400_000,
+  db: FieldFormsDb = localDb,
+): Promise<void> {
   const cutoff = Date.now() - olderThanMs;
   await db.outbox.filter((i) => i.status === 'synced' && (i.syncedAt ?? 0) < cutoff).delete();
 }

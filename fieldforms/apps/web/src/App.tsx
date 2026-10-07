@@ -43,7 +43,11 @@ export function App() {
           </button>
         </div>
       </header>
-      {offline && <div className="banner">You are offline. Registers are saved on this phone and sent when you reconnect.</div>}
+      {offline && (
+        <div className="banner">
+          You are offline. Registers are saved on this phone and sent when you reconnect.
+        </div>
+      )}
       <main>
         <Routes>
           <Route path="/" element={<Navigate to={office ? '/reports' : '/register'} replace />} />

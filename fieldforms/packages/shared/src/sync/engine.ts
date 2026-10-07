@@ -58,8 +58,7 @@ export interface OutboxStore {
 }
 
 export type TransportResult =
-  | { ok: true }
-  | { ok: false; kind: 'retryable' | 'auth' | 'permanent'; message: string };
+  { ok: true } | { ok: false; kind: 'retryable' | 'auth' | 'permanent'; message: string };
 
 export interface SyncTransport {
   putBlob(id: string, blob: StoredBlob): Promise<TransportResult>;
@@ -104,7 +103,13 @@ export async function runSync(opts: SyncOptions): Promise<SyncReport> {
   const leaseMs = opts.leaseMs ?? DEFAULT_LEASE_MS;
   const { store, transport } = opts;
 
-  const report: SyncReport = { attempted: 0, synced: 0, retrying: 0, failed: 0, authRequired: false };
+  const report: SyncReport = {
+    attempted: 0,
+    synced: 0,
+    retrying: 0,
+    failed: 0,
+    authRequired: false,
+  };
   const items = await store.claimDue(now(), leaseMs);
 
   for (let i = 0; i < items.length; i++) {
@@ -128,7 +133,11 @@ export async function runSync(opts: SyncOptions): Promise<SyncReport> {
       // The session has expired. Every remaining item would fail the same way, so release them
       // all untouched and stop; the app asks the user to sign in again, then resumes.
       report.authRequired = true;
-      await store.update(item.id, { status: 'auth_required', lastError: result.message, leaseUntil: 0 });
+      await store.update(item.id, {
+        status: 'auth_required',
+        lastError: result.message,
+        leaseUntil: 0,
+      });
       for (const rest of items.slice(i + 1)) {
         await store.update(rest.id, { status: 'auth_required', leaseUntil: 0 });
       }
@@ -139,7 +148,12 @@ export async function runSync(opts: SyncOptions): Promise<SyncReport> {
     if (result.kind === 'permanent') {
       // The server rejected the content itself (validation, permission). Retrying cannot help,
       // so park it visibly with the reason. It is never discarded.
-      await store.update(item.id, { status: 'failed', attempts, lastError: result.message, leaseUntil: 0 });
+      await store.update(item.id, {
+        status: 'failed',
+        attempts,
+        lastError: result.message,
+        leaseUntil: 0,
+      });
       report.failed++;
     } else {
       await store.update(item.id, {
@@ -172,14 +186,19 @@ async function sendItem(
     return await transport.postItem(item, new Date(now()).toISOString());
   } catch (err) {
     // A thrown error (fetch rejecting while offline) is always worth retrying.
-    return { ok: false, kind: 'retryable', message: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      kind: 'retryable',
+      message: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
 /** Maps an HTTP status from the API to how the engine should treat it. */
 export function classifyHttpStatus(status: number): TransportResult {
   if (status >= 200 && status < 300) return { ok: true };
-  if (status === 401) return { ok: false, kind: 'auth', message: 'Signed out — sign in again to sync' };
+  if (status === 401)
+    return { ok: false, kind: 'auth', message: 'Signed out — sign in again to sync' };
   if (status === 408 || status === 425 || status === 429 || status >= 500) {
     return { ok: false, kind: 'retryable', message: `Server busy (${status})` };
   }

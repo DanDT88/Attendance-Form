@@ -54,7 +54,11 @@ export interface EmployeesTable {
   title: string | null;
   site_id: string | null;
   pool_region_id: string | null;
-  status: ColumnType<'active' | 'inactive', 'active' | 'inactive' | undefined, 'active' | 'inactive'>;
+  status: ColumnType<
+    'active' | 'inactive',
+    'active' | 'inactive' | undefined,
+    'active' | 'inactive'
+  >;
   created_at: TimestampDefault;
   updated_at: TimestampDefault;
   anonymised_at: Timestamp | null;

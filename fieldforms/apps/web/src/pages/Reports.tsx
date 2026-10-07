@@ -47,7 +47,13 @@ const FLAG_TEXT: Record<string, [string, 'bad' | 'warn' | 'info']> = {
 
 export function ReportsPage() {
   const today = localDate(new Date());
-  const [filter, setFilter] = useState({ from: today, to: today, companyId: '', regionId: '', siteId: '' });
+  const [filter, setFilter] = useState({
+    from: today,
+    to: today,
+    companyId: '',
+    regionId: '',
+    siteId: '',
+  });
   const [missingOnly, setMissingOnly] = useState(false);
   const org = useQuery({ queryKey: ['org'], queryFn: () => api<Org>('/meta/org') });
   const qs = useMemo(() => {
@@ -57,24 +63,48 @@ export function ReportsPage() {
     if (filter.siteId) p.set('siteId', filter.siteId);
     return p.toString();
   }, [filter]);
-  const report = useQuery({ queryKey: ['report', qs], queryFn: () => api<{ rows: Row[] }>(`/reports/daily?${qs}`) });
-  const rows = (report.data?.rows ?? []).filter((r) => !missingOnly || r.flags.missingIn || r.flags.missingOut);
+  const report = useQuery({
+    queryKey: ['report', qs],
+    queryFn: () => api<{ rows: Row[] }>(`/reports/daily?${qs}`),
+  });
+  const rows = (report.data?.rows ?? []).filter(
+    (r) => !missingOnly || r.flags.missingIn || r.flags.missingOut,
+  );
 
-  const regions = (org.data?.regions ?? []).filter((r) => !filter.companyId || r.company_id === filter.companyId);
-  const sites = (org.data?.sites ?? []).filter((s) => (!filter.regionId ? regions.some((r) => r.id === s.region_id) : s.region_id === filter.regionId));
+  const regions = (org.data?.regions ?? []).filter(
+    (r) => !filter.companyId || r.company_id === filter.companyId,
+  );
+  const sites = (org.data?.sites ?? []).filter((s) =>
+    !filter.regionId ? regions.some((r) => r.id === s.region_id) : s.region_id === filter.regionId,
+  );
 
   return (
     <div className="stack">
       <div className="card filters">
         <label>
-          From <input type="date" value={filter.from} onChange={(e) => setFilter({ ...filter, from: e.target.value })} />
+          From{' '}
+          <input
+            type="date"
+            value={filter.from}
+            onChange={(e) => setFilter({ ...filter, from: e.target.value })}
+          />
         </label>
         <label>
-          To <input type="date" value={filter.to} onChange={(e) => setFilter({ ...filter, to: e.target.value })} />
+          To{' '}
+          <input
+            type="date"
+            value={filter.to}
+            onChange={(e) => setFilter({ ...filter, to: e.target.value })}
+          />
         </label>
         <label>
           Company
-          <select value={filter.companyId} onChange={(e) => setFilter({ ...filter, companyId: e.target.value, regionId: '', siteId: '' })}>
+          <select
+            value={filter.companyId}
+            onChange={(e) =>
+              setFilter({ ...filter, companyId: e.target.value, regionId: '', siteId: '' })
+            }
+          >
             <option value="">All</option>
             {org.data?.companies.map((c) => (
               <option key={c.id} value={c.id}>
@@ -85,7 +115,10 @@ export function ReportsPage() {
         </label>
         <label>
           Region
-          <select value={filter.regionId} onChange={(e) => setFilter({ ...filter, regionId: e.target.value, siteId: '' })}>
+          <select
+            value={filter.regionId}
+            onChange={(e) => setFilter({ ...filter, regionId: e.target.value, siteId: '' })}
+          >
             <option value="">All</option>
             {regions.map((r) => (
               <option key={r.id} value={r.id}>
@@ -96,7 +129,10 @@ export function ReportsPage() {
         </label>
         <label>
           Site
-          <select value={filter.siteId} onChange={(e) => setFilter({ ...filter, siteId: e.target.value })}>
+          <select
+            value={filter.siteId}
+            onChange={(e) => setFilter({ ...filter, siteId: e.target.value })}
+          >
             <option value="">All</option>
             {sites.map((s) => (
               <option key={s.id} value={s.id}>
@@ -106,7 +142,12 @@ export function ReportsPage() {
           </select>
         </label>
         <label className="inline">
-          <input type="checkbox" checked={missingOnly} onChange={(e) => setMissingOnly(e.target.checked)} /> Missing clock events only
+          <input
+            type="checkbox"
+            checked={missingOnly}
+            onChange={(e) => setMissingOnly(e.target.checked)}
+          />{' '}
+          Missing clock events only
         </label>
         <div className="actions">
           <a className="button secondary" href={`/api/reports/daily/export.xlsx?${qs}`}>
@@ -166,7 +207,14 @@ function ReportRow({ r, org }: { r: Row; org: Org | undefined }) {
           <div className="muted small">{r.shift}</div>
         </td>
         <td>{r.firstIn ? formatLocal(r.firstIn, 'HH:mm') : '—'}</td>
-        <td>{r.lastOut ? formatLocal(r.lastOut, r.lastOut.slice(0, 10) === r.firstIn?.slice(0, 10) ? 'HH:mm' : 'dd MMM HH:mm') : '—'}</td>
+        <td>
+          {r.lastOut
+            ? formatLocal(
+                r.lastOut,
+                r.lastOut.slice(0, 10) === r.firstIn?.slice(0, 10) ? 'HH:mm' : 'dd MMM HH:mm',
+              )
+            : '—'}
+        </td>
         <td>{r.hoursWorked ?? '—'}</td>
         <td>
           {r.status.replace(/_/g, ' ')}
@@ -199,7 +247,12 @@ function ReportRow({ r, org }: { r: Row; org: Org | undefined }) {
       {adding && (
         <tr>
           <td colSpan={9}>
-            <ManualEventForm r={r} org={org} event={r.flags.missingOut ? 'out' : 'in'} onDone={() => setAdding(false)} />
+            <ManualEventForm
+              r={r}
+              org={org}
+              event={r.flags.missingOut ? 'out' : 'in'}
+              onDone={() => setAdding(false)}
+            />
           </td>
         </tr>
       )}
@@ -207,12 +260,26 @@ function ReportRow({ r, org }: { r: Row; org: Org | undefined }) {
   );
 }
 
-function ManualEventForm({ r, org, event, onDone }: { r: Row; org: Org | undefined; event: 'in' | 'out'; onDone(): void }) {
+function ManualEventForm({
+  r,
+  org,
+  event,
+  onDone,
+}: {
+  r: Row;
+  org: Org | undefined;
+  event: 'in' | 'out';
+  onDone(): void;
+}) {
   const qc = useQueryClient();
   const shifts = (org?.shifts ?? []).filter((s) => s.site_id === r.siteId);
-  const [shiftId, setShiftId] = useState(shifts.find((s) => s.name === r.shift)?.id ?? shifts[0]?.id ?? '');
+  const [shiftId, setShiftId] = useState(
+    shifts.find((s) => s.name === r.shift)?.id ?? shifts[0]?.id ?? '',
+  );
   const shift = shifts.find((s) => s.id === shiftId);
-  const [time, setTime] = useState(event === 'out' ? (shift?.end_time ?? '') : (shift?.start_time ?? ''));
+  const [time, setTime] = useState(
+    event === 'out' ? (shift?.end_time ?? '') : (shift?.start_time ?? ''),
+  );
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   return (
@@ -223,7 +290,15 @@ function ManualEventForm({ r, org, event, onDone }: { r: Row; org: Org | undefin
         try {
           await api('/registers/manual', {
             method: 'POST',
-            body: { employeeId: r.employeeId, siteId: r.siteId, shiftId, workDate: r.workDate, event, time, reason },
+            body: {
+              employeeId: r.employeeId,
+              siteId: r.siteId,
+              shiftId,
+              workDate: r.workDate,
+              event,
+              time,
+              reason,
+            },
           });
           await qc.invalidateQueries({ queryKey: ['report'] });
           onDone();
@@ -232,7 +307,9 @@ function ManualEventForm({ r, org, event, onDone }: { r: Row; org: Org | undefin
         }
       }}
     >
-      <b>Add {event.toUpperCase()} for {r.employeeName}</b>
+      <b>
+        Add {event.toUpperCase()} for {r.employeeName}
+      </b>
       <select value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
         {shifts.map((s) => (
           <option key={s.id} value={s.id}>
@@ -241,7 +318,13 @@ function ManualEventForm({ r, org, event, onDone }: { r: Row; org: Org | undefin
         ))}
       </select>
       <input type="time" required value={time} onChange={(e) => setTime(e.target.value)} />
-      <input required minLength={3} placeholder="Reason (required)" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <input
+        required
+        minLength={3}
+        placeholder="Reason (required)"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+      />
       <button type="submit">Save</button>
       <button type="button" className="link" onClick={onDone}>
         Cancel

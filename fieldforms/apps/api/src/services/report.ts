@@ -13,7 +13,8 @@ export interface ReportFilter {
   employeeId?: string;
 }
 
-export type DayStatus = 'present' | 'late' | 'absent' | 'left_early' | 'late_left_early' | 'unknown';
+export type DayStatus =
+  'present' | 'late' | 'absent' | 'left_early' | 'late_left_early' | 'unknown';
 
 export interface DailyRow {
   workDate: string;
@@ -86,7 +87,12 @@ const MAX_RANGE_DAYS = 366;
  * One row per employee per work date: first IN, last OUT, hours, status and flags.
  * Reads the effective (corrected) values; originals are untouched.
  */
-export async function dailyReport(db: Db, user: AuthUser, f: ReportFilter, now = new Date()): Promise<DailyRow[]> {
+export async function dailyReport(
+  db: Db,
+  user: AuthUser,
+  f: ReportFilter,
+  now = new Date(),
+): Promise<DailyRow[]> {
   const days = (Date.parse(f.to) - Date.parse(f.from)) / 86_400_000;
   if (!(days >= 0)) throw badRequest('"to" must be on or after "from"');
   if (days > MAX_RANGE_DAYS) throw badRequest(`The range can be at most ${MAX_RANGE_DAYS} days`);
@@ -192,7 +198,9 @@ export function summarise(rows: EntryRow[], now: Date): DailyRow[] {
         : null;
 
     const replacement = g.find((r) => r.replacement_name)?.replacement_name ?? null;
-    const reasons = [...new Set(g.map((r) => r.reason).filter((x): x is string => !!x && x !== 'N/A'))];
+    const reasons = [
+      ...new Set(g.map((r) => r.reason).filter((x): x is string => !!x && x !== 'N/A')),
+    ];
 
     out.push({
       workDate: latest.work_date,
@@ -273,7 +281,9 @@ const FLAG_LABELS: Record<keyof DailyRow['flags'], string> = {
 };
 
 export function flagList(flags: DailyRow['flags']): string[] {
-  return (Object.keys(FLAG_LABELS) as (keyof DailyRow['flags'])[]).filter((k) => flags[k]).map((k) => FLAG_LABELS[k]);
+  return (Object.keys(FLAG_LABELS) as (keyof DailyRow['flags'])[])
+    .filter((k) => flags[k])
+    .map((k) => FLAG_LABELS[k]);
 }
 
 /** Rows as display values (times in Africa/Johannesburg), in REPORT_COLUMNS order. */

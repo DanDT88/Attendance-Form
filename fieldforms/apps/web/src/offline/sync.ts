@@ -45,7 +45,13 @@ export function syncNow(opts: { now?: boolean } = {}): Promise<SyncReport> {
   set({ running: true });
   inFlight = (async () => {
     const owner = await currentOwnerId();
-    let report: SyncReport = { attempted: 0, synced: 0, retrying: 0, failed: 0, authRequired: false };
+    let report: SyncReport = {
+      attempted: 0,
+      synced: 0,
+      retrying: 0,
+      failed: 0,
+      authRequired: false,
+    };
     // With no connection every attempt fails at once; skipping keeps the backoff for real server
     // trouble rather than growing it while the phone has no signal.
     if (!owner || !navigator.onLine) return report;
@@ -63,7 +69,14 @@ export function syncNow(opts: { now?: boolean } = {}): Promise<SyncReport> {
     return report;
   })();
   inFlight
-    .then((report) => set({ running: false, lastRun: Date.now(), lastReport: report, authRequired: report.authRequired }))
+    .then((report) =>
+      set({
+        running: false,
+        lastRun: Date.now(),
+        lastReport: report,
+        authRequired: report.authRequired,
+      }),
+    )
     .catch(() => set({ running: false, lastRun: Date.now() }))
     .finally(() => {
       inFlight = null;
@@ -75,7 +88,9 @@ export function syncNow(opts: { now?: boolean } = {}): Promise<SyncReport> {
 async function registerBackgroundSync(): Promise<void> {
   try {
     const reg = await navigator.serviceWorker?.ready;
-    const sync = (reg as ServiceWorkerRegistration & { sync?: { register(tag: string): Promise<void> } })?.sync;
+    const sync = (
+      reg as ServiceWorkerRegistration & { sync?: { register(tag: string): Promise<void> } }
+    )?.sync;
     await sync?.register(SYNC_TAG);
   } catch {
     // Not supported (iOS Safari, Firefox): the triggers below cover it while the app is open.

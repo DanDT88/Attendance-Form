@@ -29,7 +29,10 @@ const envSchema = z.object({
   S3_ACCESS_KEY: z.string().optional(),
   S3_SECRET_KEY: z.string().optional(),
   S3_FORCE_PATH_STYLE: bool,
-  MAX_PHOTO_BYTES: z.coerce.number().int().default(5 * 1024 * 1024),
+  MAX_PHOTO_BYTES: z.coerce
+    .number()
+    .int()
+    .default(5 * 1024 * 1024),
 
   /** Comma-separated provider ids, e.g. "microsoft,google". Each needs the three OIDC_<ID>_* vars. */
   OIDC_PROVIDERS: z.string().default(''),
@@ -66,7 +69,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       const clientId = env[`OIDC_${key}_CLIENT_ID`];
       const clientSecret = env[`OIDC_${key}_CLIENT_SECRET`];
       if (!issuer || !clientId || !clientSecret) {
-        throw new Error(`OIDC provider "${id}" needs OIDC_${key}_ISSUER, _CLIENT_ID and _CLIENT_SECRET`);
+        throw new Error(
+          `OIDC provider "${id}" needs OIDC_${key}_ISSUER, _CLIENT_ID and _CLIENT_SECRET`,
+        );
       }
       return { id, label: env[`OIDC_${key}_LABEL`] ?? id, issuer, clientId, clientSecret };
     });

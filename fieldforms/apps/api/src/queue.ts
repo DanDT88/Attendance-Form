@@ -15,7 +15,11 @@ export const NOTIFY_JOB_OPTIONS = {
  * Creates a queue unless it exists. The API and the worker both do this at start-up, and two
  * concurrent createQueue calls can deadlock inside pg-boss, so a deadlock or duplicate is retried.
  */
-export async function ensureQueue(boss: PgBoss, name: string, options: Omit<PgBoss.Queue, 'name'> = {}): Promise<void> {
+export async function ensureQueue(
+  boss: PgBoss,
+  name: string,
+  options: Omit<PgBoss.Queue, 'name'> = {},
+): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     if (await boss.getQueue(name)) return;
     try {
@@ -42,7 +46,11 @@ export function bossQueue(boss: PgBoss): JobQueue {
   return {
     async enqueueRegisterNotify(submissionId) {
       // singletonKey: a second enqueue for the same register while one is queued is a no-op.
-      await boss.send(REGISTER_NOTIFY, { submissionId }, { ...NOTIFY_JOB_OPTIONS, singletonKey: submissionId });
+      await boss.send(
+        REGISTER_NOTIFY,
+        { submissionId },
+        { ...NOTIFY_JOB_OPTIONS, singletonKey: submissionId },
+      );
     },
   };
 }

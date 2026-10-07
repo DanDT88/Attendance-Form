@@ -17,7 +17,12 @@ afterAll(async () => t?.close());
 
 async function submit(over: Record<string, unknown> = {}) {
   const body = startRegister(t.fx, { id: randomUUID(), ...over });
-  const res = await t.app.inject({ method: 'POST', url: '/api/registers', headers: { ...H, cookie: sup }, payload: body });
+  const res = await t.app.inject({
+    method: 'POST',
+    url: '/api/registers',
+    headers: { ...H, cookie: sup },
+    payload: body,
+  });
   expect(res.statusCode).toBe(201);
   return body.id;
 }
@@ -49,8 +54,14 @@ describe('register summary email', () => {
 
   it('records a failure and rethrows so the queue retries; the sweeper finds it again', async () => {
     const id = await submit();
-    await expect(deliverRegisterSummary(t.db, blobs, recordingMailer(true).mailer, noPdf, id)).rejects.toThrow('SMTP down');
-    const log = await t.owner.selectFrom('notification_log').selectAll().where('submission_id', '=', id).execute();
+    await expect(
+      deliverRegisterSummary(t.db, blobs, recordingMailer(true).mailer, noPdf, id),
+    ).rejects.toThrow('SMTP down');
+    const log = await t.owner
+      .selectFrom('notification_log')
+      .selectAll()
+      .where('submission_id', '=', id)
+      .execute();
     expect(log).toEqual([expect.objectContaining({ status: 'failed', detail: 'SMTP down' })]);
     expect(await findUndelivered(t.db)).toContain(id);
 
@@ -62,10 +73,19 @@ describe('register summary email', () => {
   it('still sends when the PDF renderer fails, and says so in the log', async () => {
     const id = await submit();
     const m = recordingMailer();
-    const broken = { htmlToPdf: async () => { throw new Error('renderer down'); } };
+    const broken = {
+      htmlToPdf: async () => {
+        throw new Error('renderer down');
+      },
+    };
     expect(await deliverRegisterSummary(t.db, blobs, m.mailer, broken, id)).toBe('sent');
     expect(m.sent[0]!.attachments).toEqual([]);
-    const log = await t.owner.selectFrom('notification_log').select('detail').where('submission_id', '=', id).where('status', '=', 'sent').executeTakeFirstOrThrow();
+    const log = await t.owner
+      .selectFrom('notification_log')
+      .select('detail')
+      .where('submission_id', '=', id)
+      .where('status', '=', 'sent')
+      .executeTakeFirstOrThrow();
     expect(log.detail).toMatch(/renderer down/);
   });
 
@@ -74,7 +94,10 @@ describe('register summary email', () => {
     const m = recordingMailer();
     const pdf = { htmlToPdf: async () => Buffer.from('%PDF-1.4 fake') };
     await deliverRegisterSummary(t.db, blobs, m.mailer, pdf, id);
-    expect(m.sent[0]!.attachments[0]).toMatchObject({ contentType: 'application/pdf', filename: 'Attendance_register_Site_A_2026-10-05.pdf' });
+    expect(m.sent[0]!.attachments[0]).toMatchObject({
+      contentType: 'application/pdf',
+      filename: 'Attendance_register_Site_A_2026-10-05.pdf',
+    });
   });
 
   it('skips and records registers with no recipients', async () => {

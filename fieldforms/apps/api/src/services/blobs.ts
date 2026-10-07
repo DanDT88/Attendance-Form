@@ -9,10 +9,18 @@ export const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as 
 
 /** Magic numbers, so a client cannot store arbitrary files by lying about Content-Type. */
 function sniff(data: Buffer): string | null {
-  if (data.length > 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return 'image/jpeg';
-  if (data.length > 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+  if (data.length > 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff)
+    return 'image/jpeg';
+  if (
+    data.length > 8 &&
+    data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  )
     return 'image/png';
-  if (data.length > 12 && data.subarray(0, 4).toString('ascii') === 'RIFF' && data.subarray(8, 12).toString('ascii') === 'WEBP')
+  if (
+    data.length > 12 &&
+    data.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    data.subarray(8, 12).toString('ascii') === 'WEBP'
+  )
     return 'image/webp';
   return null;
 }
@@ -32,9 +40,14 @@ export async function putBlob(
   if (!type) throw badRequest('Only JPEG, PNG or WebP photos are accepted');
   const sha256 = createHash('sha256').update(data).digest('hex');
 
-  const existing = await db.selectFrom('blobs').select(['sha256', 'uploaded_by']).where('id', '=', id).executeTakeFirst();
+  const existing = await db
+    .selectFrom('blobs')
+    .select(['sha256', 'uploaded_by'])
+    .where('id', '=', id)
+    .executeTakeFirst();
   if (existing) {
-    if (existing.sha256 !== sha256 || existing.uploaded_by !== user.id) throw conflict('A different photo already has this id');
+    if (existing.sha256 !== sha256 || existing.uploaded_by !== user.id)
+      throw conflict('A different photo already has this id');
     return { id, duplicate: true };
   }
 
@@ -45,7 +58,14 @@ export async function putBlob(
   await store.put(key, data, type);
   await db
     .insertInto('blobs')
-    .values({ id, sha256, content_type: type, size_bytes: data.length, storage_key: key, uploaded_by: user.id })
+    .values({
+      id,
+      sha256,
+      content_type: type,
+      size_bytes: data.length,
+      storage_key: key,
+      uploaded_by: user.id,
+    })
     .onConflict((oc) => oc.column('id').doNothing())
     .execute();
   return { id, duplicate: false };
@@ -67,7 +87,11 @@ export async function getBlobForUser(
       .selectFrom('register_submissions')
       .select('id')
       .where((eb) => eb.or([eb('supervisor_photo_id', '=', id), eb('staff_photo_id', '=', id)]))
-      .where('site_id', 'in', user.siteIds.length ? user.siteIds : ['00000000-0000-0000-0000-000000000000'])
+      .where(
+        'site_id',
+        'in',
+        user.siteIds.length ? user.siteIds : ['00000000-0000-0000-0000-000000000000'],
+      )
       .executeTakeFirst();
     allowed = !!ref;
   }

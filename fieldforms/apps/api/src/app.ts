@@ -19,7 +19,10 @@ export interface AppDeps {
   queue: JobQueue;
 }
 
-export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
+export async function buildApp(
+  deps: AppDeps,
+  opts: { logger?: boolean } = {},
+): Promise<FastifyInstance> {
   const app = Fastify({
     logger: opts.logger ?? false,
     trustProxy: deps.cfg.TRUST_PROXY,

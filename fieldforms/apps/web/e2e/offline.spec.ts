@@ -62,7 +62,10 @@ async function fillStartRegister(page: Page, workDate: string) {
   await rows.nth(1).getByPlaceholder('Reason').fill('Sick');
 }
 
-test('airplane mode: clock in offline, reconnect, the record appears exactly once', async ({ page, context }) => {
+test('airplane mode: clock in offline, reconnect, the record appears exactly once', async ({
+  page,
+  context,
+}) => {
   const workDate = '2026-03-02';
   await signInAsSupervisor(page);
   await waitForServiceWorker(page);
@@ -87,7 +90,9 @@ test('airplane mode: clock in offline, reconnect, the record appears exactly onc
 
   // Back online: it syncs on its own.
   await context.setOffline(false);
-  await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+  await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', {
+    timeout: 20_000,
+  });
   await expect(page.getByTestId('sync-chip')).toContainText('All synced');
 
   // Asking again changes nothing.
@@ -102,7 +107,9 @@ test('airplane mode: clock in offline, reconnect, the record appears exactly onc
     data: { email: 'manager@fieldforms.local', password: 'fieldforms-dev-manager' },
   });
   expect(mgr.status()).toBe(200);
-  const report = await page.context().request.get(`/api/reports/daily?from=${workDate}&to=${workDate}`);
+  const report = await page
+    .context()
+    .request.get(`/api/reports/daily?from=${workDate}&to=${workDate}`);
   const rows = (await report.json()).rows as { employeeId: string; status: string }[];
   expect(rows).toHaveLength(18);
   expect(new Set(rows.map((r) => r.employeeId)).size).toBe(18);
@@ -114,7 +121,9 @@ test.describe('with the network intercepted', () => {
   // Requests a service worker makes are invisible to page.route, so keep it out of these tests.
   test.use({ serviceWorkers: 'block' });
 
-  test('a response lost after the server stored the register is retried and stored once', async ({ page }) => {
+  test('a response lost after the server stored the register is retried and stored once', async ({
+    page,
+  }) => {
     const workDate = '2026-03-03';
     await signInAsSupervisor(page);
 
@@ -139,20 +148,30 @@ test.describe('with the network intercepted', () => {
     // Retry after the backoff (2-4 s for the first retry).
     await expect(async () => {
       await page.getByTestId('sync-now').click();
-      await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', { timeout: 1000 });
+      await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', {
+        timeout: 1000,
+      });
     }).toPass({ timeout: 20_000 });
 
     expect(posts).toBeGreaterThanOrEqual(2);
-    expect(await serverCounts(workDate)).toEqual({ submissions: 1, entries: 18, distinct_employees: 18 });
+    expect(await serverCounts(workDate)).toEqual({
+      submissions: 1,
+      entries: 18,
+      distinct_employees: 18,
+    });
   });
 
-  test('a server outage keeps the register queued and visible until it recovers', async ({ page }) => {
+  test('a server outage keeps the register queued and visible until it recovers', async ({
+    page,
+  }) => {
     const workDate = '2026-03-04';
     await signInAsSupervisor(page);
 
     let down = true;
     await page.route('**/api/registers', (route) =>
-      down && route.request().method() === 'POST' ? route.fulfill({ status: 503, body: '{}' }) : route.continue(),
+      down && route.request().method() === 'POST'
+        ? route.fulfill({ status: 503, body: '{}' })
+        : route.continue(),
     );
 
     await fillStartRegister(page, workDate);
@@ -165,12 +184,16 @@ test.describe('with the network intercepted', () => {
     down = false;
     await expect(async () => {
       await page.getByTestId('sync-now').click();
-      await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', { timeout: 1000 });
+      await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', {
+        timeout: 1000,
+      });
     }).toPass({ timeout: 20_000 });
     expect((await serverCounts(workDate)).submissions).toBe(1);
   });
 
-  test('closing the app mid-upload loses nothing: the claim lapses and the register is sent once', async ({ page }) => {
+  test('closing the app mid-upload loses nothing: the claim lapses and the register is sent once', async ({
+    page,
+  }) => {
     test.setTimeout(90_000);
     const workDate = '2026-03-05';
     await signInAsSupervisor(page);
@@ -194,7 +217,13 @@ test.describe('with the network intercepted', () => {
     await page.getByRole('link', { name: 'Outbox' }).first().click();
     await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'syncing');
     // After the 30 s lease the item is claimed again and sent.
-    await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', { timeout: 60_000 });
-    expect(await serverCounts(workDate)).toEqual({ submissions: 1, entries: 18, distinct_employees: 18 });
+    await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', {
+      timeout: 60_000,
+    });
+    expect(await serverCounts(workDate)).toEqual({
+      submissions: 1,
+      entries: 18,
+      distinct_employees: 18,
+    });
   });
 });

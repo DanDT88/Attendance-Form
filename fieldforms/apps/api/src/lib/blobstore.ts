@@ -57,7 +57,13 @@ export class S3BlobStore implements BlobStore {
   private readonly client: S3Client;
   constructor(
     private readonly bucket: string,
-    opts: { endpoint?: string; region: string; accessKey?: string; secretKey?: string; forcePathStyle: boolean },
+    opts: {
+      endpoint?: string;
+      region: string;
+      accessKey?: string;
+      secretKey?: string;
+      forcePathStyle: boolean;
+    },
   ) {
     this.client = new S3Client({
       region: opts.region,

@@ -29,7 +29,10 @@ export interface OidcPending {
   verifier: string;
 }
 
-export async function startOidc(p: OidcProviderConfig, redirectUri: string): Promise<{ url: string; pending: OidcPending }> {
+export async function startOidc(
+  p: OidcProviderConfig,
+  redirectUri: string,
+): Promise<{ url: string; pending: OidcPending }> {
   const config = await configFor(p);
   const verifier = client.randomPKCECodeVerifier();
   const state = client.randomState();
@@ -81,14 +84,18 @@ export async function matchOidcUser(
     if (!bound.active) throw new HttpError(403, 'This account is deactivated');
     return bound.id;
   }
-  if (!identity.email) throw new HttpError(403, 'Your account has no email address that FieldForms recognises');
+  if (!identity.email)
+    throw new HttpError(403, 'Your account has no email address that FieldForms recognises');
   const byEmail = await db
     .selectFrom('users')
     .select(['id', 'active', 'role', 'oidc_subject'])
     .where('email', '=', identity.email)
     .executeTakeFirst();
   if (!byEmail || !byEmail.active || byEmail.role === 'supervisor') {
-    throw new HttpError(403, 'No FieldForms account for this email. Ask an administrator to add you.');
+    throw new HttpError(
+      403,
+      'No FieldForms account for this email. Ask an administrator to add you.',
+    );
   }
   if (byEmail.oidc_subject) {
     // The email is already bound to a different identity: refuse rather than silently re-binding.

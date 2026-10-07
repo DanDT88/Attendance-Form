@@ -4,7 +4,12 @@ import type { Db } from '../db/index.js';
 import type { BlobStore } from '../lib/blobstore.js';
 
 export interface Mailer {
-  send(msg: { to: string[]; subject: string; html: string; attachments: { filename: string; content: Buffer; contentType: string }[] }): Promise<void>;
+  send(msg: {
+    to: string[];
+    subject: string;
+    html: string;
+    attachments: { filename: string; content: Buffer; contentType: string }[];
+  }): Promise<void>;
 }
 
 export interface PdfRenderer {
@@ -13,12 +18,25 @@ export interface PdfRenderer {
 }
 
 const esc = (s: unknown) =>
-  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  String(s ?? '').replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 
-const STATUS_COLOUR: Record<string, string> = { present: '#2f855a', late: '#c05621', absent: '#c53030', left_early: '#2b6cb0' };
+const STATUS_COLOUR: Record<string, string> = {
+  present: '#2f855a',
+  late: '#c05621',
+  absent: '#c53030',
+  left_early: '#2b6cb0',
+};
 
 /** The summary email and PDF for a start or end register, as the legacy app sent them. */
-export async function renderRegisterSummary(db: Db, blobs: BlobStore, submissionId: string, embedPhotos: boolean) {
+export async function renderRegisterSummary(
+  db: Db,
+  blobs: BlobStore,
+  submissionId: string,
+  embedPhotos: boolean,
+) {
   const r = await db
     .selectFrom('register_submissions as r')
     .innerJoin('sites as s', 's.id', 'r.site_id')
@@ -72,7 +90,10 @@ export async function renderRegisterSummary(db: Db, blobs: BlobStore, submission
   const detail = (e: (typeof entries)[number]) => {
     const parts: string[] = [];
     if (e.status === 'late' && e.minutes !== null) parts.push(`${e.minutes} min late`);
-    if (e.status === 'left_early' && e.event_at) parts.push(`left ${formatLocal(e.event_at, 'HH:mm')}${e.minutes ? ` (${e.minutes} min early)` : ''}`);
+    if (e.status === 'left_early' && e.event_at)
+      parts.push(
+        `left ${formatLocal(e.event_at, 'HH:mm')}${e.minutes ? ` (${e.minutes} min early)` : ''}`,
+      );
     if (e.reason) parts.push(e.reason);
     return parts.join(' · ');
   };
@@ -81,9 +102,16 @@ export async function renderRegisterSummary(db: Db, blobs: BlobStore, submission
   if (embedPhotos) {
     for (const id of [r.supervisor_photo_id, r.staff_photo_id]) {
       if (!id) continue;
-      const meta = await db.selectFrom('blobs').select(['storage_key', 'content_type']).where('id', '=', id).executeTakeFirst();
+      const meta = await db
+        .selectFrom('blobs')
+        .select(['storage_key', 'content_type'])
+        .where('id', '=', id)
+        .executeTakeFirst();
       const data = meta && (await blobs.get(meta.storage_key));
-      if (meta && data) photos.push(`<img src="data:${meta.content_type};base64,${data.toString('base64')}" style="width:260px;border-radius:6px;margin:6px">`);
+      if (meta && data)
+        photos.push(
+          `<img src="data:${meta.content_type};base64,${data.toString('base64')}" style="width:260px;border-radius:6px;margin:6px">`,
+        );
     }
   }
 
@@ -108,7 +136,9 @@ export async function renderRegisterSummary(db: Db, blobs: BlobStore, submission
       <thead><tr style="background:#f7fafc;text-align:left"><th style="padding:8px">Employee</th><th style="padding:8px">Status</th><th style="padding:8px">Detail</th><th style="padding:8px">Replacement</th></tr></thead>
       <tbody>${entries
         .map(
-          (e) => `<tr style="border-top:1px solid #edf2f7"><td style="padding:8px">${esc(e.name)}</td>
+          (
+            e,
+          ) => `<tr style="border-top:1px solid #edf2f7"><td style="padding:8px">${esc(e.name)}</td>
           <td style="padding:8px;color:${STATUS_COLOUR[e.status] ?? '#1a202c'}"><b>${esc(e.status.replace('_', ' ').toUpperCase())}</b></td>
           <td style="padding:8px">${esc(detail(e))}</td><td style="padding:8px">${esc(e.replacement ?? '')}</td></tr>`,
         )
@@ -121,7 +151,9 @@ export async function renderRegisterSummary(db: Db, blobs: BlobStore, submission
   return {
     recipients,
     subject: `${title}: ${r.site} (${r.work_date})`,
-    filename: `${title.replace(/\s+/g, '_')}_${r.site}_${r.work_date}`.replace(/[^a-zA-Z0-9_-]/g, '_') + '.pdf',
+    filename:
+      `${title.replace(/\s+/g, '_')}_${r.site}_${r.work_date}`.replace(/[^a-zA-Z0-9_-]/g, '_') +
+      '.pdf',
     html,
   };
 }
@@ -148,7 +180,14 @@ export async function deliverRegisterSummary(
   const email = await renderRegisterSummary(db, blobs, submissionId, false);
   if (!email) return 'skipped';
   if (!email.recipients.length) {
-    await db.insertInto('notification_log').values({ submission_id: submissionId, status: 'skipped', detail: 'No report recipients configured' }).execute();
+    await db
+      .insertInto('notification_log')
+      .values({
+        submission_id: submissionId,
+        status: 'skipped',
+        detail: 'No report recipients configured',
+      })
+      .execute();
     return 'skipped';
   }
 
@@ -167,12 +206,19 @@ export async function deliverRegisterSummary(
       to: email.recipients,
       subject: email.subject,
       html: email.html,
-      attachments: attachment ? [{ filename: email.filename, content: attachment, contentType: 'application/pdf' }] : [],
+      attachments: attachment
+        ? [{ filename: email.filename, content: attachment, contentType: 'application/pdf' }]
+        : [],
     });
   } catch (err) {
     await db
       .insertInto('notification_log')
-      .values({ submission_id: submissionId, status: 'failed', recipients: email.recipients, detail: (err as Error).message.slice(0, 500) })
+      .values({
+        submission_id: submissionId,
+        status: 'failed',
+        recipients: email.recipients,
+        detail: (err as Error).message.slice(0, 500),
+      })
       .execute();
     throw err;
   }

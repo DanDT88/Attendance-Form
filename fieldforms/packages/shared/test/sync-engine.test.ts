@@ -36,7 +36,9 @@ class MemoryStore implements OutboxStore {
   async claimDue(now: number, leaseMs: number): Promise<OutboxItem[]> {
     const due = [...this.items.values()]
       .filter(
-        (i) => (i.status === 'pending' && i.nextAttemptAt <= now) || (i.status === 'syncing' && i.leaseUntil < now),
+        (i) =>
+          (i.status === 'pending' && i.nextAttemptAt <= now) ||
+          (i.status === 'syncing' && i.leaseUntil < now),
       )
       .sort((a, b) => a.createdAt - b.createdAt);
     for (const i of due) Object.assign(i, { status: 'syncing', leaseUntil: now + leaseMs });
@@ -133,7 +135,10 @@ describe('runSync', () => {
     await runSync({ store, transport: server, now: () => t, random: () => 0 });
     t = 100_000;
     await runSync({ store, transport: server, now: () => t, random: () => 0 });
-    expect(server.sentAt).toEqual([new Date(10_000).toISOString(), new Date(100_000).toISOString()]);
+    expect(server.sentAt).toEqual([
+      new Date(10_000).toISOString(),
+      new Date(100_000).toISOString(),
+    ]);
   });
 
   it('keeps an item queued while offline and backs off between attempts', async () => {
@@ -145,7 +150,11 @@ describe('runSync', () => {
     let t = 0;
     const now = () => t;
     await runSync({ store, transport: server, now, random: () => 0 });
-    expect(store.items.get('a')).toMatchObject({ status: 'pending', attempts: 1, nextAttemptAt: 1000 });
+    expect(store.items.get('a')).toMatchObject({
+      status: 'pending',
+      attempts: 1,
+      nextAttemptAt: 1000,
+    });
 
     // Not due yet: nothing is attempted.
     t = 500;
@@ -153,7 +162,11 @@ describe('runSync', () => {
 
     t = 1000;
     await runSync({ store, transport: server, now, random: () => 0 });
-    expect(store.items.get('a')).toMatchObject({ status: 'pending', attempts: 2, nextAttemptAt: 3000 });
+    expect(store.items.get('a')).toMatchObject({
+      status: 'pending',
+      attempts: 2,
+      nextAttemptAt: 3000,
+    });
 
     t = 3000;
     await runSync({ store, transport: server, now });
@@ -203,7 +216,10 @@ describe('runSync', () => {
     const r = await runSync({ store, transport: server });
 
     expect(r).toMatchObject({ failed: 1, synced: 1 });
-    expect(store.items.get('bad')).toMatchObject({ status: 'failed', lastError: 'Rejected by server (400)' });
+    expect(store.items.get('bad')).toMatchObject({
+      status: 'failed',
+      lastError: 'Rejected by server (400)',
+    });
     expect(store.items.get('good')!.status).toBe('synced');
   });
 

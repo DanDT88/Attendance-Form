@@ -58,9 +58,13 @@ const yesNo = (v: boolean | null) => (v === null ? 'unknown' : v ? 'yes' : 'NO')
 
 export function RegisterDetailPage() {
   const { id } = useParams();
-  const q = useQuery({ queryKey: ['register', id], queryFn: () => api<Detail>(`/registers/${id}`) });
+  const q = useQuery({
+    queryKey: ['register', id],
+    queryFn: () => api<Detail>(`/registers/${id}`),
+  });
   if (q.isLoading) return <p className="muted">Loading…</p>;
-  if (q.error || !q.data) return <p className="error">{(q.error as Error)?.message ?? 'Not found'}</p>;
+  if (q.error || !q.data)
+    return <p className="error">{(q.error as Error)?.message ?? 'Not found'}</p>;
   const { submission: s, entries, corrections } = q.data;
 
   return (
@@ -78,12 +82,22 @@ export function RegisterDetailPage() {
             {s.sign_off_name ? ` (sign-off: ${s.sign_off_name})` : ''}
           </dd>
           <dt>Captured on device</dt>
-          <dd>{s.device_captured_at ? formatLocal(s.device_captured_at, 'yyyy-MM-dd HH:mm:ss') : '—'}</dd>
+          <dd>
+            {s.device_captured_at ? formatLocal(s.device_captured_at, 'yyyy-MM-dd HH:mm:ss') : '—'}
+          </dd>
           <dt>Received by server</dt>
           <dd>
             {formatLocal(s.server_received_at, 'yyyy-MM-dd HH:mm:ss')}
-            {s.clock_skew_flag && <span className="flag bad">Device clock off by {Math.round((s.clock_skew_seconds ?? 0) / 60)} min</span>}
-            {s.sync_delay_flag && <span className="flag info">Synced {Math.round((s.sync_delay_seconds ?? 0) / 3600)} h later</span>}
+            {s.clock_skew_flag && (
+              <span className="flag bad">
+                Device clock off by {Math.round((s.clock_skew_seconds ?? 0) / 60)} min
+              </span>
+            )}
+            {s.sync_delay_flag && (
+              <span className="flag info">
+                Synced {Math.round((s.sync_delay_seconds ?? 0) / 3600)} h later
+              </span>
+            )}
           </dd>
           <dt>On site</dt>
           <dd>
@@ -100,7 +114,9 @@ export function RegisterDetailPage() {
           )}
         </dl>
         <div className="photos">
-          {s.supervisor_photo_id && <img src={`/api/blobs/${s.supervisor_photo_id}`} alt="Supervisor" />}
+          {s.supervisor_photo_id && (
+            <img src={`/api/blobs/${s.supervisor_photo_id}`} alt="Supervisor" />
+          )}
           {s.staff_photo_id && <img src={`/api/blobs/${s.staff_photo_id}`} alt="Staff" />}
         </div>
       </div>
@@ -118,7 +134,12 @@ export function RegisterDetailPage() {
           </thead>
           <tbody>
             {entries.map((e) => (
-              <EntryRow key={e.id} e={e} registerId={id!} history={corrections.filter((c) => c.entry_id === e.id)} />
+              <EntryRow
+                key={e.id}
+                e={e}
+                registerId={id!}
+                history={corrections.filter((c) => c.entry_id === e.id)}
+              />
             ))}
           </tbody>
         </table>
@@ -127,7 +148,15 @@ export function RegisterDetailPage() {
   );
 }
 
-function EntryRow({ e, registerId, history }: { e: Entry; registerId: string; history: Correction[] }) {
+function EntryRow({
+  e,
+  registerId,
+  history,
+}: {
+  e: Entry;
+  registerId: string;
+  history: Correction[];
+}) {
   const [editing, setEditing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   return (
@@ -141,7 +170,11 @@ function EntryRow({ e, registerId, history }: { e: Entry; registerId: string; hi
           {e.status.replace('_', ' ')}
           {e.corrected && <span className="flag info">Corrected</span>}
         </td>
-        <td>{e.event ? `${e.event.toUpperCase()} ${e.event_at ? formatLocal(e.event_at, 'dd MMM HH:mm') : ''}` : '—'}</td>
+        <td>
+          {e.event
+            ? `${e.event.toUpperCase()} ${e.event_at ? formatLocal(e.event_at, 'dd MMM HH:mm') : ''}`
+            : '—'}
+        </td>
         <td>
           {e.minutes !== null && <div className="small">{e.minutes} min</div>}
           {e.reason && <div className="small">{e.reason}</div>}
@@ -174,8 +207,13 @@ function EntryRow({ e, registerId, history }: { e: Entry; registerId: string; hi
                   <b>{formatLocal(c.corrected_at)}</b> by {c.corrected_by_name}: “{c.reason}”
                   <div className="small muted">
                     {Object.keys(c.new_values)
-                      .filter((k) => JSON.stringify(c.new_values[k]) !== JSON.stringify(c.old_values[k]))
-                      .map((k) => `${k}: ${String(c.old_values[k] ?? '—')} → ${String(c.new_values[k] ?? '—')}`)
+                      .filter(
+                        (k) => JSON.stringify(c.new_values[k]) !== JSON.stringify(c.old_values[k]),
+                      )
+                      .map(
+                        (k) =>
+                          `${k}: ${String(c.old_values[k] ?? '—')} → ${String(c.new_values[k] ?? '—')}`,
+                      )
                       .join(' · ')}
                   </div>
                 </li>
@@ -188,7 +226,15 @@ function EntryRow({ e, registerId, history }: { e: Entry; registerId: string; hi
   );
 }
 
-function CorrectionForm({ e, registerId, onDone }: { e: Entry; registerId: string; onDone(): void }) {
+function CorrectionForm({
+  e,
+  registerId,
+  onDone,
+}: {
+  e: Entry;
+  registerId: string;
+  onDone(): void;
+}) {
   const qc = useQueryClient();
   const [status, setStatus] = useState(e.status);
   const [time, setTime] = useState(e.event_at ? localTime(new Date(e.event_at)) : '');
@@ -202,7 +248,11 @@ function CorrectionForm({ e, registerId, onDone }: { e: Entry; registerId: strin
       className="inline-form"
       onSubmit={async (ev) => {
         ev.preventDefault();
-        const changes: Record<string, unknown> = { status, reason: note || null, minutes: minutes ? Number(minutes) : null };
+        const changes: Record<string, unknown> = {
+          status,
+          reason: note || null,
+          minutes: minutes ? Number(minutes) : null,
+        };
         if (status === 'absent') {
           changes.event = null;
           changes.eventAt = null;
@@ -234,10 +284,29 @@ function CorrectionForm({ e, registerId, onDone }: { e: Entry; registerId: strin
         <option value="absent">Absent</option>
         <option value="left_early">Left early</option>
       </select>
-      {status !== 'absent' && e.event_at && <input type="time" value={time} onChange={(ev) => setTime(ev.target.value)} title="Event time" />}
-      <input type="number" min={0} placeholder="Minutes" value={minutes} onChange={(ev) => setMinutes(ev.target.value)} />
+      {status !== 'absent' && e.event_at && (
+        <input
+          type="time"
+          value={time}
+          onChange={(ev) => setTime(ev.target.value)}
+          title="Event time"
+        />
+      )}
+      <input
+        type="number"
+        min={0}
+        placeholder="Minutes"
+        value={minutes}
+        onChange={(ev) => setMinutes(ev.target.value)}
+      />
       <input placeholder="Note" value={note} onChange={(ev) => setNote(ev.target.value)} />
-      <input required minLength={3} placeholder="Reason for correction (required)" value={reason} onChange={(ev) => setReason(ev.target.value)} />
+      <input
+        required
+        minLength={3}
+        placeholder="Reason for correction (required)"
+        value={reason}
+        onChange={(ev) => setReason(ev.target.value)}
+      />
       <button type="submit">Save correction</button>
       <button type="button" className="link" onClick={onDone}>
         Cancel

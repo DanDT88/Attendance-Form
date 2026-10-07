@@ -29,7 +29,9 @@ export interface CreateRegisterResult {
 }
 
 function zodMessage(err: { issues: { path: (string | number)[]; message: string }[] }): string {
-  return err.issues.map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message)).join('; ');
+  return err.issues
+    .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
+    .join('; ');
 }
 
 /**
@@ -40,7 +42,13 @@ export async function createRegister(
   db: Db,
   user: AuthUser,
   body: unknown,
-  deps: { settings: Settings; queue: JobQueue; now?: Date; source?: 'app' | 'seed'; ctx: AuditContext },
+  deps: {
+    settings: Settings;
+    queue: JobQueue;
+    now?: Date;
+    source?: 'app' | 'seed';
+    ctx: AuditContext;
+  },
 ): Promise<CreateRegisterResult> {
   const parsed = registerSubmissionInput.safeParse(body);
   if (!parsed.success) throw badRequest(zodMessage(parsed.error), parsed.error.issues);
@@ -68,14 +76,21 @@ export async function createRegister(
     .where('site_id', '=', input.siteId)
     .executeTakeFirst();
   if (!shift) throw badRequest('That shift does not belong to the site');
-  const shiftTimes = { startTime: shift.start_time.slice(0, 5), endTime: shift.end_time.slice(0, 5) };
+  const shiftTimes = {
+    startTime: shift.start_time.slice(0, 5),
+    endTime: shift.end_time.slice(0, 5),
+  };
 
   const employeeIds = new Set<string>();
   for (const e of input.entries) {
     employeeIds.add(e.employeeId);
     if (e.replacementEmployeeId) employeeIds.add(e.replacementEmployeeId);
   }
-  const known = await db.selectFrom('employees').select('id').where('id', 'in', [...employeeIds]).execute();
+  const known = await db
+    .selectFrom('employees')
+    .select('id')
+    .where('id', 'in', [...employeeIds])
+    .execute();
   if (known.length !== employeeIds.size) throw badRequest('One or more employees are unknown');
 
   const photoIds = [input.supervisorPhotoId, input.staffPhotoId].filter((p): p is string => !!p);
@@ -85,21 +100,31 @@ export async function createRegister(
       .select(['id', 'uploaded_by'])
       .where('id', 'in', photoIds)
       .execute();
-    if (blobs.length !== new Set(photoIds).size) throw badRequest('A photo has not been uploaded yet');
-    if (blobs.some((b) => b.uploaded_by !== user.id)) throw forbidden('A photo belongs to someone else');
+    if (blobs.length !== new Set(photoIds).size)
+      throw badRequest('A photo has not been uploaded yet');
+    if (blobs.some((b) => b.uploaded_by !== user.id))
+      throw forbidden('A photo belongs to someone else');
   }
 
   const capturedAt = new Date(input.deviceCapturedAt);
   const flags = clockFlags(
     { deviceCapturedAt: capturedAt, deviceSentAt: new Date(input.deviceSentAt), serverReceivedAt },
-    { clockSkewSeconds: deps.settings.clockSkewThresholdSeconds, syncDelayFlagHours: deps.settings.syncDelayFlagHours },
+    {
+      clockSkewSeconds: deps.settings.clockSkewThresholdSeconds,
+      syncDelayFlagHours: deps.settings.syncDelayFlagHours,
+    },
   );
   const geo = checkGeofence(input.location, {
     lat: site.lat,
     lng: site.lng,
     geofenceMetres: site.geofence_metres,
   });
-  const timeOk = checkShiftTime(input.kind, shiftTimes, capturedAt, deps.settings.shiftGraceMinutes);
+  const timeOk = checkShiftTime(
+    input.kind,
+    shiftTimes,
+    capturedAt,
+    deps.settings.shiftGraceMinutes,
+  );
 
   const entries = input.entries.map((e) => {
     const ev = deriveEntryEvent({
@@ -163,7 +188,12 @@ export async function createRegister(
       action: 'register.create',
       entity: 'register_submission',
       entityId: input.id,
-      details: { kind: input.kind, siteId: input.siteId, workDate: input.workDate, entries: entries.length },
+      details: {
+        kind: input.kind,
+        siteId: input.siteId,
+        workDate: input.workDate,
+        entries: entries.length,
+      },
     });
     return true;
   });
@@ -183,14 +213,31 @@ export async function createRegister(
     id: input.id,
     duplicate: false,
     serverReceivedAt: serverReceivedAt.toISOString(),
-    flags: { clockSkew: flags.clockSkewFlag, syncDelay: flags.syncDelayFlag, geoOk: geo.ok, timeOk },
+    flags: {
+      clockSkew: flags.clockSkewFlag,
+      syncDelay: flags.syncDelayFlag,
+      geoOk: geo.ok,
+      timeOk,
+    },
   };
 }
 
-async function findExisting(db: Db, id: string, userId: string): Promise<CreateRegisterResult | null> {
+async function findExisting(
+  db: Db,
+  id: string,
+  userId: string,
+): Promise<CreateRegisterResult | null> {
   const row = await db
     .selectFrom('register_submissions')
-    .select(['id', 'submitted_by', 'server_received_at', 'clock_skew_flag', 'sync_delay_flag', 'geo_ok', 'time_ok'])
+    .select([
+      'id',
+      'submitted_by',
+      'server_received_at',
+      'clock_skew_flag',
+      'sync_delay_flag',
+      'geo_ok',
+      'time_ok',
+    ])
     .where('id', '=', id)
     .executeTakeFirst();
   if (!row) return null;
@@ -200,7 +247,12 @@ async function findExisting(db: Db, id: string, userId: string): Promise<CreateR
     id: row.id,
     duplicate: true,
     serverReceivedAt: row.server_received_at.toISOString(),
-    flags: { clockSkew: row.clock_skew_flag, syncDelay: row.sync_delay_flag, geoOk: row.geo_ok, timeOk: row.time_ok },
+    flags: {
+      clockSkew: row.clock_skew_flag,
+      syncDelay: row.sync_delay_flag,
+      geoOk: row.geo_ok,
+      timeOk: row.time_ok,
+    },
   };
 }
 
@@ -223,7 +275,11 @@ export async function createManualEvent(
     .where('site_id', '=', input.siteId)
     .executeTakeFirst();
   if (!shift) throw badRequest('That shift does not belong to the site');
-  const employee = await db.selectFrom('employees').select('id').where('id', '=', input.employeeId).executeTakeFirst();
+  const employee = await db
+    .selectFrom('employees')
+    .select('id')
+    .where('id', '=', input.employeeId)
+    .executeTakeFirst();
   if (!employee) throw badRequest('Unknown employee');
 
   const eventAt = resolveShiftTime(input.workDate, input.time, {
@@ -278,7 +334,12 @@ export async function createManualEvent(
       action: 'register.manual_event',
       entity: 'register_submission',
       entityId: id,
-      details: { employeeId: input.employeeId, event: input.event, time: input.time, reason: input.reason },
+      details: {
+        employeeId: input.employeeId,
+        event: input.event,
+        time: input.time,
+        reason: input.reason,
+      },
     });
   });
   return { id, entryId };
@@ -310,7 +371,9 @@ export async function listRegisters(db: Db, user: AuthUser, f: RegisterListFilte
       's.name as site_name',
       'sh.name as shift_name',
       'u.display_name as submitted_by_name',
-      sql<number>`(SELECT count(*) FROM attendance_entries e WHERE e.submission_id = r.id)`.as('entry_count'),
+      sql<number>`(SELECT count(*) FROM attendance_entries e WHERE e.submission_id = r.id)`.as(
+        'entry_count',
+      ),
     ])
     .where('r.work_date', '>=', f.from)
     .where('r.work_date', '<=', f.to)
@@ -370,7 +433,15 @@ export async function getRegister(db: Db, user: AuthUser, id: string) {
     ? await db
         .selectFrom('entry_corrections as c')
         .innerJoin('users as u', 'u.id', 'c.corrected_by')
-        .select(['c.id', 'c.entry_id', 'c.old_values', 'c.new_values', 'c.reason', 'c.corrected_at', 'u.display_name as corrected_by_name'])
+        .select([
+          'c.id',
+          'c.entry_id',
+          'c.old_values',
+          'c.new_values',
+          'c.reason',
+          'c.corrected_at',
+          'u.display_name as corrected_by_name',
+        ])
         .where('c.entry_id', 'in', entryIds)
         .orderBy('c.corrected_at', 'asc')
         .execute()

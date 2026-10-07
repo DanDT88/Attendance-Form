@@ -34,7 +34,13 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   const { db } = deps;
   const admin = (req: FastifyRequest) => requireRole(req, 'admin');
 
-  async function logged(req: FastifyRequest, action: string, entity: string, entityId: string, details?: Record<string, unknown>) {
+  async function logged(
+    req: FastifyRequest,
+    action: string,
+    entity: string,
+    entityId: string,
+    details?: Record<string, unknown>,
+  ) {
     await audit(db, auditCtx(req), { action, entity, entityId, details });
   }
 
@@ -45,9 +51,16 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   });
   app.post('/admin/companies', async (req, reply) => {
     admin(req);
-    const b = parse(z.object({ name: z.string().trim().min(1).max(120), reportRecipients: emails.default([]) }), req.body);
+    const b = parse(
+      z.object({ name: z.string().trim().min(1).max(120), reportRecipients: emails.default([]) }),
+      req.body,
+    );
     const row = await unique(
-      db.insertInto('companies').values({ name: b.name, report_recipients: b.reportRecipients }).returningAll().executeTakeFirstOrThrow(),
+      db
+        .insertInto('companies')
+        .values({ name: b.name, report_recipients: b.reportRecipients })
+        .returningAll()
+        .executeTakeFirstOrThrow(),
       'company',
     );
     await logged(req, 'admin.company.create', 'company', row.id, b);
@@ -56,11 +69,22 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   app.patch<{ Params: { id: string } }>('/admin/companies/:id', async (req) => {
     admin(req);
     const id = parse(uuid, req.params.id);
-    const b = parse(z.object({ name: z.string().trim().min(1).max(120).optional(), reportRecipients: emails.optional(), active: active.optional() }), req.body);
+    const b = parse(
+      z.object({
+        name: z.string().trim().min(1).max(120).optional(),
+        reportRecipients: emails.optional(),
+        active: active.optional(),
+      }),
+      req.body,
+    );
     const row = await unique(
       db
         .updateTable('companies')
-        .set({ ...(b.name && { name: b.name }), ...(b.reportRecipients && { report_recipients: b.reportRecipients }), ...deactivation(b.active) })
+        .set({
+          ...(b.name && { name: b.name }),
+          ...(b.reportRecipients && { report_recipients: b.reportRecipients }),
+          ...deactivation(b.active),
+        })
         .where('id', '=', id)
         .returningAll()
         .executeTakeFirst(),
@@ -78,9 +102,16 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   });
   app.post('/admin/regions', async (req, reply) => {
     admin(req);
-    const b = parse(z.object({ companyId: uuid, name: z.string().trim().min(1).max(120) }), req.body);
+    const b = parse(
+      z.object({ companyId: uuid, name: z.string().trim().min(1).max(120) }),
+      req.body,
+    );
     const row = await unique(
-      db.insertInto('regions').values({ company_id: b.companyId, name: b.name }).returningAll().executeTakeFirstOrThrow(),
+      db
+        .insertInto('regions')
+        .values({ company_id: b.companyId, name: b.name })
+        .returningAll()
+        .executeTakeFirstOrThrow(),
       'region',
     );
     await logged(req, 'admin.region.create', 'region', row.id, b);
@@ -89,9 +120,17 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   app.patch<{ Params: { id: string } }>('/admin/regions/:id', async (req) => {
     admin(req);
     const id = parse(uuid, req.params.id);
-    const b = parse(z.object({ name: z.string().trim().min(1).max(120).optional(), active: active.optional() }), req.body);
+    const b = parse(
+      z.object({ name: z.string().trim().min(1).max(120).optional(), active: active.optional() }),
+      req.body,
+    );
     const row = await unique(
-      db.updateTable('regions').set({ ...(b.name && { name: b.name }), ...deactivation(b.active) }).where('id', '=', id).returningAll().executeTakeFirst(),
+      db
+        .updateTable('regions')
+        .set({ ...(b.name && { name: b.name }), ...deactivation(b.active) })
+        .where('id', '=', id)
+        .returningAll()
+        .executeTakeFirst(),
       'region',
     );
     if (!row) throw notFound();
@@ -115,7 +154,8 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   app.post('/admin/sites', async (req, reply) => {
     admin(req);
     const b = parse(siteBody, req.body);
-    if ((b.lat === null) !== (b.lng === null)) throw badRequest('Give both latitude and longitude, or neither');
+    if ((b.lat === null) !== (b.lng === null))
+      throw badRequest('Give both latitude and longitude, or neither');
     const settings = await getSettings(db);
     const row = await unique(
       db
@@ -138,7 +178,10 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   app.patch<{ Params: { id: string } }>('/admin/sites/:id', async (req) => {
     admin(req);
     const id = parse(uuid, req.params.id);
-    const b = parse(siteBody.omit({ regionId: true }).partial().extend({ active: active.optional() }), req.body);
+    const b = parse(
+      siteBody.omit({ regionId: true }).partial().extend({ active: active.optional() }),
+      req.body,
+    );
     if ((b.lat === undefined) !== (b.lng === undefined) || (b.lat === null) !== (b.lng === null)) {
       throw badRequest('Give both latitude and longitude, or neither');
     }
@@ -174,7 +217,15 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
     admin(req);
     return db
       .selectFrom('shifts')
-      .select(['id', 'site_id', 'name', 'kind', sql<string>`to_char(start_time, 'HH24:MI')`.as('start_time'), sql<string>`to_char(end_time, 'HH24:MI')`.as('end_time'), 'deactivated_at'])
+      .select([
+        'id',
+        'site_id',
+        'name',
+        'kind',
+        sql<string>`to_char(start_time, 'HH24:MI')`.as('start_time'),
+        sql<string>`to_char(end_time, 'HH24:MI')`.as('end_time'),
+        'deactivated_at',
+      ])
       .orderBy('name')
       .execute();
   });
@@ -183,7 +234,13 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
     const b = parse(shiftBody, req.body);
     const row = await db
       .insertInto('shifts')
-      .values({ site_id: b.siteId, name: b.name, kind: b.kind, start_time: b.startTime, end_time: b.endTime })
+      .values({
+        site_id: b.siteId,
+        name: b.name,
+        kind: b.kind,
+        start_time: b.startTime,
+        end_time: b.endTime,
+      })
       .returning('id')
       .executeTakeFirstOrThrow();
     await logged(req, 'admin.shift.create', 'shift', row.id, b);
@@ -192,7 +249,10 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   app.patch<{ Params: { id: string } }>('/admin/shifts/:id', async (req) => {
     admin(req);
     const id = parse(uuid, req.params.id);
-    const b = parse(shiftBody.omit({ siteId: true }).partial().extend({ active: active.optional() }), req.body);
+    const b = parse(
+      shiftBody.omit({ siteId: true }).partial().extend({ active: active.optional() }),
+      req.body,
+    );
     const row = await db
       .updateTable('shifts')
       .set({
@@ -221,14 +281,30 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   });
   app.get('/admin/employees', async (req) => {
     admin(req);
-    const q = parse(z.object({ siteId: uuid.optional(), search: z.string().max(80).optional(), includeInactive: z.enum(['true', 'false']).optional() }), req.query);
-    let query = db.selectFrom('employees').selectAll().orderBy('last_name').orderBy('first_name').limit(2000);
+    const q = parse(
+      z.object({
+        siteId: uuid.optional(),
+        search: z.string().max(80).optional(),
+        includeInactive: z.enum(['true', 'false']).optional(),
+      }),
+      req.query,
+    );
+    let query = db
+      .selectFrom('employees')
+      .selectAll()
+      .orderBy('last_name')
+      .orderBy('first_name')
+      .limit(2000);
     if (q.siteId) query = query.where('site_id', '=', q.siteId);
     if (q.includeInactive !== 'true') query = query.where('status', '=', 'active');
     if (q.search) {
       const term = `%${q.search.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
       query = query.where((eb) =>
-        eb.or([eb('first_name', 'ilike', term), eb('last_name', 'ilike', term), eb('employee_no', 'ilike', term)]),
+        eb.or([
+          eb('first_name', 'ilike', term),
+          eb('last_name', 'ilike', term),
+          eb('employee_no', 'ilike', term),
+        ]),
       );
     }
     return query.execute();
@@ -257,7 +333,10 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
   app.patch<{ Params: { id: string } }>('/admin/employees/:id', async (req) => {
     admin(req);
     const id = parse(uuid, req.params.id);
-    const b = parse(employeeBody.partial().extend({ status: z.enum(['active', 'inactive']).optional() }), req.body);
+    const b = parse(
+      employeeBody.partial().extend({ status: z.enum(['active', 'inactive']).optional() }),
+      req.body,
+    );
     const row = await unique(
       db
         .updateTable('employees')
@@ -292,7 +371,18 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
     password: z.string().optional(),
     scopes: scopes.default([]),
   });
-  const publicUser = ['id', 'role', 'display_name', 'email', 'employee_no', 'active', 'locked_until', 'last_login_at', 'oidc_issuer', 'created_at'] as const;
+  const publicUser = [
+    'id',
+    'role',
+    'display_name',
+    'email',
+    'employee_no',
+    'active',
+    'locked_until',
+    'last_login_at',
+    'oidc_issuer',
+    'created_at',
+  ] as const;
 
   async function setScopes(trx: Db, userId: string, list: z.infer<typeof scopes>) {
     await trx.deleteFrom('user_scopes').where('user_id', '=', userId).execute();
@@ -311,7 +401,9 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
     const allScopes = await db.selectFrom('user_scopes').selectAll().execute();
     return users.map((u) => ({
       ...u,
-      scopes: allScopes.filter((s) => s.user_id === u.id).map((s) => ({ type: s.scope_type, id: s.scope_id })),
+      scopes: allScopes
+        .filter((s) => s.user_id === u.id)
+        .map((s) => ({ type: s.scope_type, id: s.scope_id })),
     }));
   });
 
@@ -330,7 +422,8 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
       }
     }
     const pinHash = b.role === 'supervisor' && b.pin ? await hashSecret(b.pin) : null;
-    const passwordHash = b.role !== 'supervisor' && b.password ? await hashSecret(b.password) : null;
+    const passwordHash =
+      b.role !== 'supervisor' && b.password ? await hashSecret(b.password) : null;
     const row = await unique(
       db.transaction().execute(async (trx) => {
         const u = await trx
@@ -350,7 +443,12 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
           .returning(publicUser)
           .executeTakeFirstOrThrow();
         await setScopes(trx, u.id, b.scopes);
-        await audit(trx, auditCtx(req), { action: 'admin.user.create', entity: 'user', entityId: u.id, details: { role: b.role, scopes: b.scopes } });
+        await audit(trx, auditCtx(req), {
+          action: 'admin.user.create',
+          entity: 'user',
+          entityId: u.id,
+          details: { role: b.role, scopes: b.scopes },
+        });
         return u;
       }),
       'user (email or employee number)',
@@ -372,7 +470,11 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
       }),
       req.body,
     );
-    const user = await db.selectFrom('users').select(['id', 'role']).where('id', '=', id).executeTakeFirst();
+    const user = await db
+      .selectFrom('users')
+      .select(['id', 'role'])
+      .where('id', '=', id)
+      .executeTakeFirst();
     if (!user) throw notFound();
     if (id === me.id && b.active === false) throw badRequest('You cannot deactivate yourself');
     if (b.pin !== undefined) {
@@ -400,7 +502,8 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
         .execute();
       if (b.scopes) await setScopes(trx, id, b.scopes);
       // A deactivated user or a changed secret signs out everywhere.
-      if (b.active === false || b.pin !== undefined || b.password !== undefined) await deleteUserSessions(trx, id);
+      if (b.active === false || b.pin !== undefined || b.password !== undefined)
+        await deleteUserSessions(trx, id);
       await audit(trx, auditCtx(req), {
         action: 'admin.user.update',
         entity: 'user',
@@ -423,24 +526,42 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
     const me = admin(req);
     const patch = parse(settingsSchema.partial(), req.body);
     const next = await updateSettings(db, patch, me.id);
-    await audit(db, auditCtx(req), { action: 'admin.settings.update', entity: 'settings', details: { keys: Object.keys(patch) } });
+    await audit(db, auditCtx(req), {
+      action: 'admin.settings.update',
+      entity: 'settings',
+      details: { keys: Object.keys(patch) },
+    });
     return next;
   });
 
   app.get('/admin/audit', async (req) => {
     admin(req);
     const q = parse(
-      z.object({ before: z.coerce.number().int().optional(), action: z.string().max(80).optional(), limit: z.coerce.number().int().min(1).max(500).default(100) }),
+      z.object({
+        before: z.coerce.number().int().optional(),
+        action: z.string().max(80).optional(),
+        limit: z.coerce.number().int().min(1).max(500).default(100),
+      }),
       req.query,
     );
     let query = db
       .selectFrom('audit_log as a')
       .leftJoin('users as u', 'u.id', 'a.actor_user_id')
-      .select(['a.id', 'a.at', 'a.action', 'a.entity', 'a.entity_id', 'a.ip', 'a.details', 'u.display_name as actor'])
+      .select([
+        'a.id',
+        'a.at',
+        'a.action',
+        'a.entity',
+        'a.entity_id',
+        'a.ip',
+        'a.details',
+        'u.display_name as actor',
+      ])
       .orderBy('a.id', 'desc')
       .limit(q.limit);
     if (q.before) query = query.where('a.id', '<', q.before);
-    if (q.action) query = query.where('a.action', 'like', `${q.action.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
+    if (q.action)
+      query = query.where('a.action', 'like', `${q.action.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
     return query.execute();
   });
 
@@ -453,7 +574,9 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
     const me = admin(req);
     const id = parse(uuid, req.params.id);
     const data = await subjectAccessExport(db, me, id, auditCtx(req));
-    return reply.header('content-disposition', `attachment; filename="subject-access-${id}.json"`).send(data);
+    return reply
+      .header('content-disposition', `attachment; filename="subject-access-${id}.json"`)
+      .send(data);
   });
 
   app.post<{ Params: { id: string } }>('/privacy/employees/:id/delete', async (req) => {
@@ -468,7 +591,15 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
       .selectFrom('privacy_requests as p')
       .innerJoin('employees as e', 'e.id', 'p.employee_id')
       .innerJoin('users as u', 'u.id', 'p.requested_by')
-      .select(['p.id', 'p.kind', 'p.status', 'p.decision_reason', 'p.created_at', 'e.employee_no', 'u.display_name as requested_by'])
+      .select([
+        'p.id',
+        'p.kind',
+        'p.status',
+        'p.decision_reason',
+        'p.created_at',
+        'e.employee_no',
+        'u.display_name as requested_by',
+      ])
       .orderBy('p.created_at', 'desc')
       .limit(500)
       .execute();

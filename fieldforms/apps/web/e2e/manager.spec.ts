@@ -17,7 +17,9 @@ async function signInAsAdmin(page: Page) {
   await expect(page.getByTestId('report')).toBeVisible();
 }
 
-test('manager adds a missing clock-out and corrects an entry, with reasons and history', async ({ page }) => {
+test('manager adds a missing clock-out and corrects an entry, with reasons and history', async ({
+  page,
+}) => {
   await signInAsAdmin(page);
   const yesterday = await page.evaluate(() => {
     const d = new Date(Date.now() - 86_400_000);
@@ -49,7 +51,9 @@ test('manager adds a missing clock-out and corrects an entry, with reasons and h
   await entry.getByRole('button', { name: 'Correct' }).click();
   await page.locator('form.inline-form select').first().selectOption('late');
   await page.getByPlaceholder('Minutes').fill('25');
-  await page.getByPlaceholder('Reason for correction (required)').fill('Gate log shows a late arrival');
+  await page
+    .getByPlaceholder('Reason for correction (required)')
+    .fill('Gate log shows a late arrival');
   await page.getByRole('button', { name: 'Save correction' }).click();
   await expect(entry).toContainText('late');
   await expect(entry).toContainText('Corrected');

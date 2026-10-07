@@ -16,7 +16,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: false,
       // A classic (non-module) worker: module service workers need iOS 16.4+.
-      injectManifest: { globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'], rollupFormat: 'iife' },
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
+        rollupFormat: 'iife',
+      },
       devOptions: { enabled: false },
       manifest: {
         name: 'FieldForms',

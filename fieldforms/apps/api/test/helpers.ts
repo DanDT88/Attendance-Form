@@ -25,7 +25,13 @@ export interface Fixture {
   employeesA: string[];
   employeesB: string[];
   poolEmployee: string;
-  users: { admin: string; manager: string; managerB: string; supervisor: string; supervisorB: string };
+  users: {
+    admin: string;
+    manager: string;
+    managerB: string;
+    supervisor: string;
+    supervisorB: string;
+  };
 }
 
 export interface TestContext {
@@ -85,11 +91,26 @@ export async function createTestContext(): Promise<TestContext> {
 }
 
 async function seedFixture(db: Db): Promise<Fixture> {
-  const company = await db.insertInto('companies').values({ name: 'Acme Cleaning', report_recipients: ['ops@acme.test'] }).returning('id').executeTakeFirstOrThrow();
-  const region = await db.insertInto('regions').values({ company_id: company.id, name: 'Gauteng' }).returning('id').executeTakeFirstOrThrow();
+  const company = await db
+    .insertInto('companies')
+    .values({ name: 'Acme Cleaning', report_recipients: ['ops@acme.test'] })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  const region = await db
+    .insertInto('regions')
+    .values({ company_id: company.id, name: 'Gauteng' })
+    .returning('id')
+    .executeTakeFirstOrThrow();
   const siteA = await db
     .insertInto('sites')
-    .values({ region_id: region.id, name: 'Site A', lat: -26.2041, lng: 28.0473, geofence_metres: 500, report_recipients: null })
+    .values({
+      region_id: region.id,
+      name: 'Site A',
+      lat: -26.2041,
+      lng: 28.0473,
+      geofence_metres: 500,
+      report_recipients: null,
+    })
     .returning('id')
     .executeTakeFirstOrThrow();
   const siteB = await db
@@ -97,27 +118,59 @@ async function seedFixture(db: Db): Promise<Fixture> {
     .values({ region_id: region.id, name: 'Site B', lat: null, lng: null, report_recipients: null })
     .returning('id')
     .executeTakeFirstOrThrow();
-  const shift = (site_id: string, name: string, kind: 'day' | 'night', start_time: string, end_time: string) =>
-    db.insertInto('shifts').values({ site_id, name, kind, start_time, end_time }).returning('id').executeTakeFirstOrThrow();
+  const shift = (
+    site_id: string,
+    name: string,
+    kind: 'day' | 'night',
+    start_time: string,
+    end_time: string,
+  ) =>
+    db
+      .insertInto('shifts')
+      .values({ site_id, name, kind, start_time, end_time })
+      .returning('id')
+      .executeTakeFirstOrThrow();
   const dayA = await shift(siteA.id, 'Day', 'day', '07:00', '16:00');
   const nightA = await shift(siteA.id, 'Night', 'night', '18:00', '06:00');
   const dayB = await shift(siteB.id, 'Day', 'day', '08:00', '17:00');
 
-  const emp = async (no: string, first: string, last: string, site_id: string | null, pool: string | null = null) =>
+  const emp = async (
+    no: string,
+    first: string,
+    last: string,
+    site_id: string | null,
+    pool: string | null = null,
+  ) =>
     (
       await db
         .insertInto('employees')
-        .values({ employee_no: no, first_name: first, last_name: last, title: 'Cleaner', site_id, pool_region_id: pool })
+        .values({
+          employee_no: no,
+          first_name: first,
+          last_name: last,
+          title: 'Cleaner',
+          site_id,
+          pool_region_id: pool,
+        })
         .returning('id')
         .executeTakeFirstOrThrow()
     ).id;
-  const employeesA = [await emp('E001', 'Thandi', 'Mokoena', siteA.id), await emp('E002', 'Pieter', 'Botha', siteA.id), await emp('E003', 'Ayesha', 'Khan', siteA.id)];
+  const employeesA = [
+    await emp('E001', 'Thandi', 'Mokoena', siteA.id),
+    await emp('E002', 'Pieter', 'Botha', siteA.id),
+    await emp('E003', 'Ayesha', 'Khan', siteA.id),
+  ];
   const employeesB = [await emp('E101', 'Sipho', 'Dlamini', siteB.id)];
   const poolEmployee = await emp('P001', 'Lerato', 'Nkosi', null, region.id);
 
   const pinHash = await hashSecret(PIN);
   const pwHash = await hashSecret(PASSWORD);
-  const user = async (role: 'admin' | 'manager' | 'supervisor', name: string, ident: string, scope?: ['site' | 'region' | 'company', string]) => {
+  const user = async (
+    role: 'admin' | 'manager' | 'supervisor',
+    name: string,
+    ident: string,
+    scope?: ['site' | 'region' | 'company', string],
+  ) => {
     const u = await db
       .insertInto('users')
       .values({
@@ -134,7 +187,11 @@ async function seedFixture(db: Db): Promise<Fixture> {
       })
       .returning('id')
       .executeTakeFirstOrThrow();
-    if (scope) await db.insertInto('user_scopes').values({ user_id: u.id, scope_type: scope[0], scope_id: scope[1] }).execute();
+    if (scope)
+      await db
+        .insertInto('user_scopes')
+        .values({ user_id: u.id, scope_type: scope[0], scope_id: scope[1] })
+        .execute();
     return u.id;
   };
 
@@ -162,7 +219,10 @@ async function seedFixture(db: Db): Promise<Fixture> {
 export const H = { 'x-fieldforms': '1' } as const;
 
 /** Signs in and returns the cookie header for later requests. */
-export async function login(app: FastifyInstance, who: 'S001' | 'S002' | 'admin@acme.test' | 'manager@acme.test' | 'managerb@acme.test'): Promise<string> {
+export async function login(
+  app: FastifyInstance,
+  who: 'S001' | 'S002' | 'admin@acme.test' | 'manager@acme.test' | 'managerb@acme.test',
+): Promise<string> {
   const isPin = !who.includes('@');
   const res = await app.inject({
     method: 'POST',
@@ -191,7 +251,12 @@ export function startRegister(fx: Fixture, over: Record<string, unknown> = {}) {
     entries: [
       { employeeId: fx.employeesA[0], status: 'present' },
       { employeeId: fx.employeesA[1], status: 'late', minutesLate: 20, reason: 'Taxi' },
-      { employeeId: fx.employeesA[2], status: 'absent', reason: 'Sick', replacementEmployeeId: fx.poolEmployee },
+      {
+        employeeId: fx.employeesA[2],
+        status: 'absent',
+        reason: 'Sick',
+        replacementEmployeeId: fx.poolEmployee,
+      },
     ],
     ...over,
   };
@@ -199,5 +264,9 @@ export function startRegister(fx: Fixture, over: Record<string, unknown> = {}) {
 
 /** A minimal valid JPEG (SOI marker + filler + EOI) — enough for the magic-number check. */
 export function fakeJpeg(seed = 1): Buffer {
-  return Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, seed), Buffer.from([0xff, 0xd9])]);
+  return Buffer.concat([
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+    Buffer.alloc(64, seed),
+    Buffer.from([0xff, 0xd9]),
+  ]);
 }

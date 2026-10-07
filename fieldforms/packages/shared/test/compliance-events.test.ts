@@ -16,8 +16,13 @@ describe('geofence', () => {
   });
 
   it('returns null rather than false when it cannot check', () => {
-    expect(checkGeofence(null, { lat: 1, lng: 1, geofenceMetres: 100 })).toEqual({ distanceMetres: null, ok: null });
-    expect(checkGeofence({ lat: 1, lng: 1 }, { lat: null, lng: null, geofenceMetres: 100 }).ok).toBeNull();
+    expect(checkGeofence(null, { lat: 1, lng: 1, geofenceMetres: 100 })).toEqual({
+      distanceMetres: null,
+      ok: null,
+    });
+    expect(
+      checkGeofence({ lat: 1, lng: 1 }, { lat: null, lng: null, geofenceMetres: 100 }).ok,
+    ).toBeNull();
   });
 
   it('passes inside and fails outside the radius', () => {
@@ -93,15 +98,32 @@ describe('deriveEntryEvent', () => {
   const base = { workDate: '2026-10-06', capturedAt: T('2026-10-06T05:05:00Z') };
 
   it('present on a start register is IN at shift start', () => {
-    const e = deriveEntryEvent({ ...base, kind: 'start', shift: day, entry: { status: 'present' } });
+    const e = deriveEntryEvent({
+      ...base,
+      kind: 'start',
+      shift: day,
+      entry: { status: 'present' },
+    });
     expect(e).toEqual({ event: 'in', eventAt: T('2026-10-06T05:00:00Z'), minutes: null });
   });
 
   it('late by minutes or by arrival time', () => {
     expect(
-      deriveEntryEvent({ ...base, kind: 'start', shift: day, entry: { status: 'late', minutesLate: 25 } }),
+      deriveEntryEvent({
+        ...base,
+        kind: 'start',
+        shift: day,
+        entry: { status: 'late', minutesLate: 25 },
+      }),
     ).toEqual({ event: 'in', eventAt: T('2026-10-06T05:25:00Z'), minutes: 25 });
-    expect(deriveEntryEvent({ ...base, kind: 'late', shift: day, entry: { status: 'late', time: '08:10' } })).toEqual({
+    expect(
+      deriveEntryEvent({
+        ...base,
+        kind: 'late',
+        shift: day,
+        entry: { status: 'late', time: '08:10' },
+      }),
+    ).toEqual({
       event: 'in',
       eventAt: T('2026-10-06T06:10:00Z'),
       minutes: 70,
@@ -109,7 +131,9 @@ describe('deriveEntryEvent', () => {
   });
 
   it('absent has no event', () => {
-    expect(deriveEntryEvent({ ...base, kind: 'start', shift: day, entry: { status: 'absent' } }).event).toBeNull();
+    expect(
+      deriveEntryEvent({ ...base, kind: 'start', shift: day, entry: { status: 'absent' } }).event,
+    ).toBeNull();
   });
 
   it('left early on a night shift lands on the next morning with minutes early', () => {
@@ -124,11 +148,17 @@ describe('deriveEntryEvent', () => {
 
   it('present on an end register is OUT at the stated end time, else capture time', () => {
     expect(
-      deriveEntryEvent({ ...base, kind: 'end', shift: night, endTime: '06:05', entry: { status: 'present' } }),
+      deriveEntryEvent({
+        ...base,
+        kind: 'end',
+        shift: night,
+        endTime: '06:05',
+        entry: { status: 'present' },
+      }),
     ).toEqual({ event: 'out', eventAt: T('2026-10-07T04:05:00Z'), minutes: null });
-    expect(deriveEntryEvent({ ...base, kind: 'end', shift: day, entry: { status: 'present' } }).eventAt).toEqual(
-      base.capturedAt,
-    );
+    expect(
+      deriveEntryEvent({ ...base, kind: 'end', shift: day, entry: { status: 'present' } }).eventAt,
+    ).toEqual(base.capturedAt);
   });
 });
 
@@ -170,7 +200,10 @@ describe('registerSubmissionInput', () => {
       }).success,
     ).toBe(false);
     expect(
-      registerSubmissionInput.safeParse({ ...valid, entries: [{ employeeId: emp, status: 'late' }] }).success,
+      registerSubmissionInput.safeParse({
+        ...valid,
+        entries: [{ employeeId: emp, status: 'late' }],
+      }).success,
     ).toBe(false);
   });
 

@@ -26,7 +26,11 @@ export async function toXlsx(rows: DailyRow[], title: string): Promise<Buffer> {
   wb.creator = 'FieldForms';
   wb.created = new Date();
   const ws = wb.addWorksheet('Daily attendance', { views: [{ state: 'frozen', ySplit: 1 }] });
-  ws.columns = REPORT_COLUMNS.map((h) => ({ header: h, key: h, width: Math.max(12, h.length + 2) }));
+  ws.columns = REPORT_COLUMNS.map((h) => ({
+    header: h,
+    key: h,
+    width: Math.max(12, h.length + 2),
+  }));
   ws.getRow(1).font = { bold: true };
   for (const r of reportTable(rows)) ws.addRow(r);
   ws.getColumn('Employee').width = 28;

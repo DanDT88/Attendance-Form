@@ -30,7 +30,8 @@ export const PIN_PATTERN = /^\d{6}$/;
 export const PASSWORD_MIN_LENGTH = 12;
 
 export function validatePassword(pw: string): string | null {
-  if (pw.length < PASSWORD_MIN_LENGTH) return `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
+  if (pw.length < PASSWORD_MIN_LENGTH)
+    return `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
   return null;
 }
 

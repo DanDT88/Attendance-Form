@@ -11,7 +11,11 @@ export interface AuthUser {
 }
 
 /** Resolves a user's company / region / site scopes to the set of site ids they cover. */
-export async function resolveSiteIds(db: Db, userId: string, role: AuthUser['role']): Promise<string[] | null> {
+export async function resolveSiteIds(
+  db: Db,
+  userId: string,
+  role: AuthUser['role'],
+): Promise<string[] | null> {
   if (role === 'admin') return null;
   const rows = await sql<{ id: string }>`
     SELECT DISTINCT s.id

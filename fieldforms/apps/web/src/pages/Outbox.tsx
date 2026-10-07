@@ -14,7 +14,8 @@ const STATUS_TEXT: Record<string, string> = {
 
 export function OutboxPage() {
   const { me, refresh } = useAuth();
-  const items = useLiveQuery(() => localDb.outbox.orderBy('createdAt').reverse().toArray(), []) ?? [];
+  const items =
+    useLiveQuery(() => localDb.outbox.orderBy('createdAt').reverse().toArray(), []) ?? [];
   const s = useSyncState();
 
   return (
@@ -23,10 +24,18 @@ export function OutboxPage() {
         <div>
           <b>Outbox</b>
           <div className="muted small">
-            {s.running ? 'Sending…' : s.lastRun ? `Last checked ${new Date(s.lastRun).toLocaleTimeString('en-ZA')}` : 'Not checked yet'}
+            {s.running
+              ? 'Sending…'
+              : s.lastRun
+                ? `Last checked ${new Date(s.lastRun).toLocaleTimeString('en-ZA')}`
+                : 'Not checked yet'}
           </div>
         </div>
-        <button onClick={() => void syncNow({ now: true })} disabled={s.running} data-testid="sync-now">
+        <button
+          onClick={() => void syncNow({ now: true })}
+          disabled={s.running}
+          data-testid="sync-now"
+        >
           Sync now
         </button>
       </div>
@@ -41,7 +50,12 @@ export function OutboxPage() {
       {!items.length && <p className="muted center">Nothing captured on this phone yet.</p>}
       <ul className="outbox">
         {items.map((i) => (
-          <li key={i.id} className={`status-${i.status}`} data-testid="outbox-item" data-status={i.status}>
+          <li
+            key={i.id}
+            className={`status-${i.status}`}
+            data-testid="outbox-item"
+            data-status={i.status}
+          >
             <div>
               <b>{i.label}</b>
               <div className="small muted">
@@ -49,8 +63,14 @@ export function OutboxPage() {
                 {i.syncedAt ? ` · sent ${new Date(i.syncedAt).toLocaleString('en-ZA')}` : ''}
                 {i.attempts ? ` · ${i.attempts} attempt${i.attempts > 1 ? 's' : ''}` : ''}
               </div>
-              {i.lastError && i.status !== 'synced' && <div className="small error">{i.lastError}</div>}
-              {i.ownerId && me && i.ownerId !== me.id && <div className="small warn-text">Captured by another user; it is sent when they sign in.</div>}
+              {i.lastError && i.status !== 'synced' && (
+                <div className="small error">{i.lastError}</div>
+              )}
+              {i.ownerId && me && i.ownerId !== me.id && (
+                <div className="small warn-text">
+                  Captured by another user; it is sent when they sign in.
+                </div>
+              )}
             </div>
             <div className="right">
               <span className="pill">{STATUS_TEXT[i.status] ?? i.status}</span>

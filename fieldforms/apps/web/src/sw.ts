@@ -1,7 +1,11 @@
 /// <reference lib="webworker" />
 import { runSync } from '@fieldforms/shared';
 import { clientsClaim } from 'workbox-core';
-import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
+import {
+  cleanupOutdatedCaches,
+  createHandlerBoundToURL,
+  precacheAndRoute,
+} from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { currentOwnerId, dexieOutboxStore } from './offline/db';
 import { SYNC_TAG } from './offline/sync';
@@ -14,7 +18,9 @@ precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
 // Every in-app URL serves the cached index.html; the API is never cached or intercepted.
-registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api\//] }));
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api\//] }),
+);
 
 self.skipWaiting();
 clientsClaim();
@@ -32,7 +38,10 @@ self.addEventListener('sync', ((event: SyncEvent) => {
       (async () => {
         const owner = await currentOwnerId();
         if (!owner) return;
-        const r = await runSync({ store: dexieOutboxStore(owner), transport: fetchTransport(self.location.origin) });
+        const r = await runSync({
+          store: dexieOutboxStore(owner),
+          transport: fetchTransport(self.location.origin),
+        });
         // Ask the browser to try again later (with its own backoff) if anything is still pending.
         if (r.retrying > 0) throw new Error('outbox not empty');
       })(),

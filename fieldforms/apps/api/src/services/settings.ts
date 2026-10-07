@@ -10,7 +10,11 @@ export async function getSettings(db: Db): Promise<Settings> {
   return parsed.success ? parsed.data : DEFAULT_SETTINGS;
 }
 
-export async function updateSettings(db: Db, patch: Partial<Settings>, userId: string): Promise<Settings> {
+export async function updateSettings(
+  db: Db,
+  patch: Partial<Settings>,
+  userId: string,
+): Promise<Settings> {
   const current = await getSettings(db);
   const next = settingsSchema.parse({ ...current, ...patch });
   for (const key of Object.keys(patch) as (keyof Settings)[]) {
@@ -18,7 +22,9 @@ export async function updateSettings(db: Db, patch: Partial<Settings>, userId: s
     await db
       .insertInto('settings')
       .values({ key, value, updated_by: userId })
-      .onConflict((oc) => oc.column('key').doUpdateSet({ value, updated_by: userId, updated_at: new Date() }))
+      .onConflict((oc) =>
+        oc.column('key').doUpdateSet({ value, updated_by: userId, updated_at: new Date() }),
+      )
       .execute();
   }
   return next;

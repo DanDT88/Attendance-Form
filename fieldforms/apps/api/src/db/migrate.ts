@@ -31,9 +31,11 @@ export async function migrate(opts: MigrateOptions): Promise<string[]> {
       applied_at timestamptz NOT NULL DEFAULT now()
     )`);
     const done = new Map<string, string>(
-      (await client.query<{ name: string; checksum: string }>('SELECT name, checksum FROM schema_migrations')).rows.map(
-        (r) => [r.name, r.checksum],
-      ),
+      (
+        await client.query<{ name: string; checksum: string }>(
+          'SELECT name, checksum FROM schema_migrations',
+        )
+      ).rows.map((r) => [r.name, r.checksum]),
     );
     const files = (await readdir(dir)).filter((f) => f.endsWith('.sql')).sort();
     for (const file of files) {
@@ -42,7 +44,9 @@ export async function migrate(opts: MigrateOptions): Promise<string[]> {
       const previous = done.get(file);
       if (previous) {
         if (previous !== checksum) {
-          throw new Error(`Migration ${file} was edited after it was applied. Add a new migration instead.`);
+          throw new Error(
+            `Migration ${file} was edited after it was applied. Add a new migration instead.`,
+          );
         }
         continue;
       }
@@ -50,7 +54,10 @@ export async function migrate(opts: MigrateOptions): Promise<string[]> {
       await client.query('BEGIN');
       try {
         await client.query(sql);
-        await client.query('INSERT INTO schema_migrations (name, checksum) VALUES ($1, $2)', [file, checksum]);
+        await client.query('INSERT INTO schema_migrations (name, checksum) VALUES ($1, $2)', [
+          file,
+          checksum,
+        ]);
         await client.query('COMMIT');
       } catch (err) {
         await client.query('ROLLBACK');
