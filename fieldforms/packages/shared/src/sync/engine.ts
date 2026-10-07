@@ -84,7 +84,9 @@ export interface SyncReport {
 
 export const BACKOFF_BASE_MS = 2_000;
 export const BACKOFF_CAP_MS = 15 * 60_000;
-export const DEFAULT_LEASE_MS = 60_000;
+// Short, because a reload mid-upload leaves the item claimed until the lease lapses, and a double
+// send after a lapsed lease is harmless (the server de-duplicates on the item id).
+export const DEFAULT_LEASE_MS = 30_000;
 
 /**
  * Exponential backoff with "equal jitter": half the window is fixed, half random. Full jitter can

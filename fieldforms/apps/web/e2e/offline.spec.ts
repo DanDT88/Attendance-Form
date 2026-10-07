@@ -169,4 +169,32 @@ test.describe('with the network intercepted', () => {
     }).toPass({ timeout: 20_000 });
     expect((await serverCounts(workDate)).submissions).toBe(1);
   });
+
+  test('closing the app mid-upload loses nothing: the claim lapses and the register is sent once', async ({ page }) => {
+    test.setTimeout(90_000);
+    const workDate = '2026-03-05';
+    await signInAsSupervisor(page);
+
+    // Hold the first upload so the page can be reloaded while it is in flight.
+    let held = false;
+    await page.route('**/api/registers', async (route) => {
+      if (route.request().method() === 'POST' && !held) {
+        held = true;
+        await new Promise((r) => setTimeout(r, 5000));
+        return route.abort('connectionaborted').catch(() => {});
+      }
+      return route.continue();
+    });
+
+    await fillStartRegister(page, workDate);
+    await page.getByTestId('submit').click();
+    await expect.poll(() => held).toBe(true);
+    await page.reload();
+
+    await page.getByRole('link', { name: 'Outbox' }).first().click();
+    await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'syncing');
+    // After the 30 s lease the item is claimed again and sent.
+    await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', { timeout: 60_000 });
+    expect(await serverCounts(workDate)).toEqual({ submissions: 1, entries: 18, distinct_employees: 18 });
+  });
 });
