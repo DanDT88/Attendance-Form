@@ -17,7 +17,7 @@ export default defineConfig({
       injectRegister: false,
       // A classic (non-module) worker: module service workers need iOS 16.4+.
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,wasm}'],
         rollupFormat: 'iife',
       },
       devOptions: { enabled: false },
@@ -49,6 +49,8 @@ export default defineConfig({
         // chunks: an app update then re-downloads only the small app chunk on prepaid data.
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
+          // The barcode reader loads only when someone scans; keep it out of the startup chunks.
+          if (id.includes('zxing-wasm')) return undefined;
           if (/[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id))
             return 'vendor-react';
           return 'vendor';

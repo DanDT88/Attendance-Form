@@ -17,7 +17,7 @@ export type OutboxStatus = 'pending' | 'syncing' | 'synced' | 'failed' | 'auth_r
 export interface OutboxItem {
   id: string;
   /** What kind of record this is; decides which endpoint receives it. */
-  type: 'register';
+  type: 'register' | 'form';
   /** The record without `deviceSentAt`, which is stamped on each attempt. */
   payload: Record<string, unknown>;
   blobIds: string[];

@@ -1,3 +1,4 @@
+import type { FormDefinition, Option } from '@fieldforms/shared';
 import { CSRF_HEADER } from '../offline/transport';
 
 export class ApiError extends Error {
@@ -45,8 +46,37 @@ export interface Me {
   consentRequired: boolean;
 }
 
+export interface PublishedForm {
+  formId: string;
+  name: string;
+  versionId: string;
+  version: number;
+  definition: FormDefinition;
+}
+
+export interface InboxItem {
+  id: string;
+  title: string;
+  instructions: string | null;
+  prefill: Record<string, unknown>;
+  site_id: string | null;
+  site_name: string | null;
+  due_on: string | null;
+  created_at: string;
+  form_id: string;
+  form_version_id: string;
+  version: number;
+  definition: FormDefinition;
+  form_name: string;
+  created_by_name: string | null;
+  group_name: string | null;
+}
+
 export interface Bootstrap {
   generatedAt: string;
+  forms: PublishedForm[];
+  lists: Record<string, Option[]>;
+  inbox: InboxItem[];
   settings: { shiftGraceMinutes: number };
   sites: {
     id: string;

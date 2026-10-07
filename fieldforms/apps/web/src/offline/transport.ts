@@ -15,7 +15,9 @@ export function fetchTransport(base = ''): SyncTransport {
       return classifyHttpStatus(res.status);
     },
     async postItem(item, deviceSentAt) {
-      const res = await fetch(`${base}/api/registers`, {
+      // Registers and form submissions share the outbox; each has its own idempotent endpoint.
+      const endpoint = item.type === 'form' ? 'form-submissions' : 'registers';
+      const res = await fetch(`${base}/api/${endpoint}`, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { ...CSRF_HEADER, 'content-type': 'application/json' },
