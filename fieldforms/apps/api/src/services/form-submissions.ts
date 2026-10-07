@@ -15,6 +15,7 @@ import type { Db } from '../db/index.js';
 import { badRequest, conflict, forbidden, HttpError, notFound } from '../lib/errors.js';
 import { parse } from '../lib/validate.js';
 import { audit, type AuditContext } from './audit.js';
+import type { JobQueue } from './registers.js';
 import { getVersion, listItems, listsUsed } from './forms.js';
 
 export const formSubmissionInput = z.object({
@@ -109,7 +110,7 @@ export async function createFormSubmission(
   db: Db,
   user: AuthUser,
   body: unknown,
-  deps: { settings: Settings; now?: Date; ctx: AuditContext },
+  deps: { settings: Settings; now?: Date; ctx: AuditContext; queue: JobQueue },
 ) {
   const input = parse(formSubmissionInput, body);
   const serverReceivedAt = deps.now ?? new Date();
@@ -259,6 +260,9 @@ export async function createFormSubmission(
         dispatchId: input.dispatchId ?? null,
       },
     });
+    // Phase 3: work out where it goes. Enqueued in this transaction, so the job exists exactly
+    // when the submission does.
+    await deps.queue.enqueuePlanDeliveries(input.id, trx);
     return true;
   });
   if (!inserted) {

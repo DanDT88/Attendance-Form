@@ -281,3 +281,224 @@ export async function cancelPendingDeliveries(
   }
   return rows.length;
 }
+
+// ---------------------------------------------------------------- planning
+
+/**
+ * Works out a submission's deliveries in one transaction. The marker goes in first: a second
+ * planner (the sweeper beside the job) waits on it and then finds it, so nothing is planned
+ * twice. A destination is used if it is active now and existed when the submission arrived.
+ */
+export async function planDeliveries(
+  db: Db,
+  queue: JobQueue,
+  submissionId: string,
+): Promise<'planned' | 'already-planned' | 'missing'> {
+  return db.transaction().execute(async (trx) => {
+    const exists = await trx
+      .selectFrom('form_submissions')
+      .select('id')
+      .where('id', '=', submissionId)
+      .executeTakeFirst();
+    if (!exists) return 'missing';
+    const marker = await trx
+      .insertInto('delivery_plans')
+      .values({ submission_id: submissionId })
+      .onConflict((oc) => oc.column('submission_id').doNothing())
+      .returning('submission_id')
+      .executeTakeFirst();
+    if (!marker) return 'already-planned';
+    const facts = (await submissionFacts(trx, [submissionId])).get(submissionId)!;
+    const destinations = await trx
+      .selectFrom('destinations as d')
+      .innerJoin('forms as f', 'f.id', 'd.form_id')
+      .select(['d.id', 'd.condition', 'd.form_id', 'f.name as form_name'])
+      .where('d.form_id', '=', facts.formId)
+      .where('d.active', '=', true)
+      .where('d.archived_at', 'is', null)
+      .where('d.created_at', '<=', facts.receivedAt)
+      .execute();
+    for (const d of destinations) {
+      await insertDeliveries(
+        trx,
+        queue,
+        { id: d.id, condition: d.condition, formId: d.form_id, formName: d.form_name },
+        [facts],
+        { ignoreCondition: false, triggeredBy: null },
+      );
+    }
+    return 'planned';
+  });
+}
+
+// ---------------------------------------------------------------- resend and retry
+
+/**
+ * Starts a new generation for finished deliveries (delivered, failed, skipped or cancelled):
+ * a new idempotency key, the destination's current settings and templates, a fresh target. A
+ * skipped delivery is sent only if its condition is now true (or `ignoreCondition`). Runs in
+ * the caller's transaction and enqueues there.
+ */
+export async function resendDeliveries(
+  trx: Db,
+  queue: JobQueue,
+  ids: string[],
+  opts: { ignoreCondition?: boolean } = {},
+): Promise<{ resent: string[]; skipped: { id: string; reason: string }[] }> {
+  const resent: string[] = [];
+  const skipped: { id: string; reason: string }[] = [];
+  const rows = ids.length
+    ? await trx
+        .selectFrom('deliveries as dl')
+        .innerJoin('destinations as d', 'd.id', 'dl.destination_id')
+        .innerJoin('forms as f', 'f.id', 'd.form_id')
+        .select([
+          'dl.id',
+          'dl.status',
+          'dl.submission_id',
+          'd.condition',
+          'd.form_id',
+          'd.active',
+          'd.archived_at',
+          'f.name as form_name',
+        ])
+        .where('dl.id', 'in', ids)
+        .forUpdate()
+        .execute()
+    : [];
+  for (const id of ids)
+    if (!rows.some((r) => r.id === id)) skipped.push({ id, reason: 'Not found' });
+  for (const r of rows) {
+    if (r.status === 'pending' || r.status === 'sending') {
+      skipped.push({ id: r.id, reason: 'Already being delivered' });
+      continue;
+    }
+    if (!r.active || r.archived_at) {
+      skipped.push({ id: r.id, reason: 'The destination is switched off' });
+      continue;
+    }
+    if (r.status === 'skipped' && !opts.ignoreCondition) {
+      const facts = (await submissionFacts(trx, [r.submission_id])).get(r.submission_id);
+      const known = fieldKeysOf((await formVersions(trx, r.form_id)).map((v) => v.definition));
+      const c = facts
+        ? evaluateCondition(r.condition, facts, known, r.form_name)
+        : { use: false, error: 'missing' };
+      if (!c.use) {
+        skipped.push({
+          id: r.id,
+          reason: c.error ? 'The condition could not be evaluated' : 'The condition is still false',
+        });
+        continue;
+      }
+    }
+    const row = await trx
+      .updateTable('deliveries')
+      .set({
+        status: 'pending',
+        generation: sql`generation + 1`,
+        attempt_count: 0,
+        next_attempt_at: sql`now()`,
+        target: null,
+        template_version_ids: null,
+        last_error: null,
+        last_error_class: null,
+        delivered_at: null,
+        updated_at: sql`now()`,
+      })
+      .where('id', '=', r.id)
+      .returning(['id', 'generation'])
+      .executeTakeFirstOrThrow();
+    await queue.enqueueDelivery({ deliveryId: row.id, generation: row.generation }, trx);
+    resent.push(row.id);
+  }
+  return { resent, skipped };
+}
+
+/** Brings a pending delivery's next attempt forward. */
+export async function retryNow(trx: Db, queue: JobQueue, id: string): Promise<boolean> {
+  const row = await trx
+    .updateTable('deliveries')
+    .set({ next_attempt_at: sql`now()`, updated_at: sql`now()` })
+    .where('id', '=', id)
+    .where('status', '=', 'pending')
+    .returning(['id', 'generation'])
+    .executeTakeFirst();
+  if (!row) return false;
+  await queue.enqueueDelivery({ deliveryId: row.id, generation: row.generation }, trx);
+  return true;
+}
+
+// ---------------------------------------------------------------- sweeper
+
+/** Attempts per generation before a delivery is failed for good (about a day of retries). */
+export const SWEEP_MAX_ATTEMPTS = 30;
+
+/**
+ * The backstop for lost jobs: plans submissions that were never planned (after 2 minutes, for
+ * a week), re-enqueues pending deliveries more than 5 minutes overdue, and returns deliveries
+ * whose worker vanished (lease expired) to pending with an `abandoned` attempt, whose outcome is
+ * unknown.
+ */
+export async function sweepDeliveries(
+  db: Db,
+  queue: JobQueue,
+): Promise<{ planned: number; requeued: number; abandoned: number }> {
+  const unplanned = await sql<{ id: string }>`
+    SELECT s.id FROM form_submissions s
+    WHERE s.server_received_at > now() - interval '7 days'
+      AND s.server_received_at < now() - interval '2 minutes'
+      AND NOT EXISTS (SELECT 1 FROM delivery_plans p WHERE p.submission_id = s.id)
+    LIMIT 500
+  `.execute(db);
+  for (const r of unplanned.rows) {
+    await db.transaction().execute((trx) => queue.enqueuePlanDeliveries(r.id, trx));
+  }
+
+  const overdue = await db
+    .selectFrom('deliveries')
+    .select(['id', 'generation'])
+    .where('status', '=', 'pending')
+    .where('next_attempt_at', '<', sql<Date>`now() - interval '5 minutes'`)
+    .limit(500)
+    .execute();
+  for (const r of overdue) {
+    await db
+      .transaction()
+      .execute((trx) => queue.enqueueDelivery({ deliveryId: r.id, generation: r.generation }, trx));
+  }
+
+  const abandoned = await db.transaction().execute(async (trx) => {
+    const rows = await trx
+      .updateTable('deliveries')
+      .set({
+        status: sql`CASE WHEN attempt_count >= ${SWEEP_MAX_ATTEMPTS} THEN 'failed' ELSE 'pending' END`,
+        lease_token: null,
+        lease_until: null,
+        next_attempt_at: sql`now()`,
+        last_error: 'The worker stopped before finishing; it may or may not have been delivered',
+        last_error_class: 'internal',
+        updated_at: sql`now()`,
+      })
+      .where('status', '=', 'sending')
+      .where('lease_until', '<', sql<Date>`now()`)
+      .returning(['id', 'generation', 'attempt_count', 'status'])
+      .execute();
+    for (const r of rows) {
+      await trx
+        .insertInto('delivery_attempts')
+        .values({
+          delivery_id: r.id,
+          generation: r.generation,
+          attempt_no: r.attempt_count,
+          outcome: 'abandoned',
+          detail: 'The worker stopped before finishing; it may or may not have been delivered',
+          started_at: new Date(),
+        })
+        .execute();
+      if (r.status === 'pending')
+        await queue.enqueueDelivery({ deliveryId: r.id, generation: r.generation }, trx);
+    }
+    return rows.length;
+  });
+  return { planned: unplanned.rows.length, requeued: overdue.length, abandoned };
+}

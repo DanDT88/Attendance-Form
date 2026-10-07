@@ -227,16 +227,23 @@ export function httpError(service: string, status: number, detail?: string): Del
 
 /**
  * Removes secrets from text before it is stored: every secret value (and its URL-encoded and
- * base64 forms), URL credentials and query strings, bearer tokens. Capped at 300 characters.
+ * base64 forms) and every longer fragment of one (a token in a URL's query, a path segment, a
+ * key's lines), URL credentials and query strings, bearer tokens. Capped at 300 characters.
  */
 export function redact(text: string, secrets: Record<string, string> = {}): string {
   let out = text;
+  const parts = new Set<string>();
   for (const v of Object.values(secrets)) {
     if (!v || v.length < 4) continue;
-    for (const form of new Set([v, encodeURIComponent(v), Buffer.from(v).toString('base64')])) {
-      out = out.split(form).join('[secret]');
-    }
+    parts.add(v);
+    parts.add(encodeURIComponent(v));
+    parts.add(Buffer.from(v).toString('base64'));
+    for (const fragment of v.split(/[^A-Za-z0-9._~+-]+/))
+      if (fragment.length >= 8) parts.add(fragment);
   }
+  // Longest first, so a whole value is replaced before its fragments.
+  for (const p of [...parts].sort((a, b) => b.length - a.length))
+    out = out.split(p).join('[secret]');
   out = out
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s@]*@/gi, '$1[credentials]@')
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#]*)\?[^\s#]*/gi, '$1?[query]')

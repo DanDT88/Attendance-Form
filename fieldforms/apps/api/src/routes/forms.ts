@@ -158,6 +158,7 @@ export async function formRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
     const result = await createFormSubmission(db, user, req.body, {
       settings: await getSettings(db),
       ctx: auditCtx(req),
+      queue,
     });
     return reply.code(result.duplicate ? 200 : 201).send(result);
   });
