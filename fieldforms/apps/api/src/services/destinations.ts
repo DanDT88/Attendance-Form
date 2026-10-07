@@ -25,6 +25,7 @@ import { sql } from 'kysely';
 import { z, type ZodIssue } from 'zod';
 import type { Db } from '../db/index.js';
 import { badRequest, notFound } from '../lib/errors.js';
+import { checkLiquid } from '../lib/liquid.js';
 import { parse } from '../lib/validate.js';
 import { analyzeTemplate } from '../outputs/templates/analyze.js';
 import { audit, type AuditContext } from './audit.js';
@@ -174,6 +175,9 @@ async function check(
   const errors: string[] = [];
   const warnings: string[] = [];
 
+  // jsonb and text cannot hold NUL characters; refuse them here rather than fail when saving.
+  if (hasNul([d.settings, d.include, d.condition, d.name, d.recipient]))
+    errors.push('Text cannot contain NUL characters');
   const settingsResult = destinationSettingsSchemas[d.kind].safeParse(d.settings ?? {});
   if (!settingsResult.success)
     errors.push(...settingsResult.error.issues.map((i) => issueText('settings', i)));
@@ -288,6 +292,11 @@ async function check(
     for (const [key, label] of LIQUID_SETTINGS) {
       const src = settings[key];
       if (typeof src !== 'string' || !src.trim()) continue;
+      if (!versions.length) {
+        const syntax = checkLiquid(src);
+        if (syntax) errors.push(`${label}: Template error: ${syntax}`);
+        continue;
+      }
       const a = await analyzeTemplate('html', src, versions);
       errors.push(...a.errors.map((e) => `${label}: ${e}`));
       warnings.push(...a.warnings.map((w) => `${label}: ${w}`));
@@ -312,6 +321,15 @@ async function check(
     errors: [...new Set(errors)],
     warnings: [...new Set(warnings)],
   };
+}
+
+/** Whether a NUL character appears in any string (or key) of a JSON value. */
+function hasNul(v: unknown): boolean {
+  if (typeof v === 'string') return v.includes('\u0000');
+  if (Array.isArray(v)) return v.some(hasNul);
+  if (v && typeof v === 'object')
+    return Object.entries(v).some(([k, x]) => k.includes('\u0000') || hasNul(x));
+  return false;
 }
 
 function refuse(errors: string[]): never {

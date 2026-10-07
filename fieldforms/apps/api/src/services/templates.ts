@@ -434,6 +434,8 @@ export async function saveTemplateContent(
   let content: string | Buffer;
   if (t.kind === 'html') {
     if (typeof body !== 'string' || !body.trim()) throw badRequest('The template is empty');
+    // Postgres text cannot hold NUL; such a file is not an HTML template anyway.
+    if (body.includes('\u0000')) throw badRequest('The template is not a text (HTML) file');
     if (body.length > HTML_MAX_CHARS)
       throw badRequest(`HTML templates can be at most ${HTML_MAX_CHARS} characters`);
     content = body;

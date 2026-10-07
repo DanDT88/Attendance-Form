@@ -193,6 +193,17 @@ describe('HTML templates', () => {
     expect(elsewhere.statusCode).toBe(415);
   });
 
+  it('refuses files that are not templates', async () => {
+    const html = await template('Not text', 'html');
+    const nul = await upload(html, '<p>{{ reg }}</p>\u0000', 'text/html');
+    expect(nul.statusCode).toBe(400);
+    const word = await template('Not Word', 'docx');
+    const garbage = await upload(word, Buffer.from('PK\u0003\u0004 not really a zip'), DOCX_TYPE);
+    expect(garbage.statusCode).toBe(400);
+    expect(garbage.json().details).toEqual(['The file is not a Word document (.docx)']);
+    expect((await upload(word, Buffer.alloc(0), DOCX_TYPE)).statusCode).toBe(400);
+  });
+
   it('previews a sample without auditing it, and a real submission with an audit row', async () => {
     const id = await template('Preview me', 'html');
     await upload(id, '<h1>{{ reg }}</h1>', 'text/html');

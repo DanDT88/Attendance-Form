@@ -440,6 +440,35 @@ describe('saving destinations', () => {
   });
 });
 
+describe('forms without a version to check against', () => {
+  it('saves with a warning, still checking syntax, and refuses NUL characters', async () => {
+    const draftOnly = (
+      await req('POST', '/api/admin/forms', admin, {
+        name: 'Unfinished',
+        definition: { schemaVersion: 1, title: 'Unfinished', fields: [] },
+      })
+    ).json().id;
+    const r = await create(email({ condition: 'anything > 1' }), draftOnly);
+    expect(r.statusCode, r.body).toBe(201);
+    expect(r.json().warnings).toEqual([
+      'The form has no published version or valid draft yet, so field names were not checked',
+    ]);
+    const syntax = await create(
+      email({ settings: { recipients: { addresses: ['a@b.test'] }, subject: '{% if %}' } }),
+      draftOnly,
+    );
+    expect(syntax.statusCode).toBe(400);
+    expect(syntax.json().details[0]).toMatch(/^Subject: Template error/);
+    expect((await create(email({ condition: 'a >' }), draftOnly)).statusCode).toBe(400);
+
+    const nul = await create(email({ name: 'Bad\u0000name' }));
+    expect(nul.statusCode).toBe(400);
+    expect(nul.json().details).toContain('Text cannot contain NUL characters');
+    // A backslash typed as text is just text.
+    expect((await create(email({ name: 'Back\\u0000slash' }))).statusCode).toBe(201);
+  });
+});
+
 describe('changing destinations', () => {
   it('writes a revision for every change and none for a no-op', async () => {
     const { id } = await created(email({ name: 'Revised' }));
