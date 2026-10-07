@@ -39,6 +39,28 @@ const envSchema = z.object({
 
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(300),
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(10),
+
+  // ---- Phase 3: documents, destinations, public API
+
+  /** Gotenberg (HTML → PDF). Without it, PDF documents cannot be made. */
+  GOTENBERG_URL: z.string().url().optional(),
+  GOTENBERG_USERNAME: z.string().optional(),
+  GOTENBERG_PASSWORD: z.string().optional(),
+  /** X25519 public key (API): seals destination secrets. See `pnpm secrets-keygen`. */
+  SECRETS_PUBLIC_KEY: z.string().optional(),
+  /** X25519 private key (worker only): opens them. Never give it to the API. */
+  SECRETS_PRIVATE_KEY: z.string().optional(),
+  SECRETS_PRIVATE_KEY_PREVIOUS: z.string().optional(),
+  /** Private ranges destinations may reach, e.g. "10.20.0.0/16" for an on-premises server. */
+  DESTINATIONS_ALLOWED_PRIVATE_CIDRS: z.string().default(''),
+  /** Allow this server's own networks (development only: lets destinations reach other containers). */
+  DESTINATIONS_ALLOW_SAME_NETWORK: bool,
+  /** Parallel deliveries per worker. */
+  DELIVERY_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
+  /** Larger documents are linked rather than attached to emails. */
+  EMAIL_ATTACHMENT_LIMIT_MB: z.coerce.number().min(1).max(50).default(10),
+  /** Public REST API: requests per minute per key. */
+  API_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(120),
 });
 
 export type Config = z.infer<typeof envSchema> & {

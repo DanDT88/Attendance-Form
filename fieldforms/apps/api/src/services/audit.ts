@@ -2,6 +2,8 @@ import type { Db } from '../db/index.js';
 
 export interface AuditContext {
   actorUserId: string | null;
+  /** Set instead of actorUserId for calls made with an API key (/api/v1). */
+  actorApiKeyId?: string | null;
   ip?: string | null;
   userAgent?: string | null;
 }
@@ -21,7 +23,8 @@ export async function audit(db: Db, ctx: AuditContext, ev: AuditEvent): Promise<
   await db
     .insertInto('audit_log')
     .values({
-      actor_user_id: ctx.actorUserId,
+      actor_user_id: ctx.actorApiKeyId ? null : ctx.actorUserId,
+      actor_api_key_id: ctx.actorApiKeyId ?? null,
       action: ev.action,
       entity: ev.entity ?? null,
       entity_id: ev.entityId ?? null,

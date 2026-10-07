@@ -3,3 +3,7 @@ packages:
   - 'packages/*'
 onlyBuiltDependencies:
   - esbuild
+ignoredBuiltDependencies:
+  # Optional native speed-ups; ssh2 falls back to pure JavaScript.
+  - cpu-features
+  - ssh2

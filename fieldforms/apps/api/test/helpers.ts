@@ -9,6 +9,13 @@ import { hashSecret } from '../src/auth/passwords.js';
 import { loadConfig } from '../src/config.js';
 import { createDb, type Db } from '../src/db/index.js';
 import { LocalBlobStore } from '../src/lib/blobstore.js';
+import {
+  createSecretOpener,
+  createSecretSealer,
+  generateSecretsKeyPair,
+  type SecretOpener,
+} from '../src/lib/secrets.js';
+import type { PdfConverter } from '../src/outputs/types.js';
 import { TEMPLATE_DB, TEST_DB_PREFIX, adminUrl, dbUrl } from './env.js';
 
 export const PIN = '482915';
@@ -44,6 +51,12 @@ export interface TestContext {
   fx: Fixture;
   enqueued: string[];
   dispatched: string[];
+  /** Phase 3 jobs, in the order they were enqueued (committed or not). */
+  jobs: { name: 'plan' | 'deliver' | 'test'; data: Record<string, unknown>; startAfter?: Date }[];
+  /** Opens secrets the API sealed (what the worker can do). */
+  opener: SecretOpener;
+  /** A fake Gotenberg: returns a small PDF-looking buffer and records its inputs. */
+  pdf: PdfConverter & { calls: { kind: 'html' | 'office'; input: string | Buffer }[] };
   close(): Promise<void>;
 }
 
@@ -68,6 +81,21 @@ export async function createTestContext(): Promise<TestContext> {
   });
   const enqueued: string[] = [];
   const dispatched: string[] = [];
+  const jobs: TestContext['jobs'] = [];
+  const keys = generateSecretsKeyPair();
+  const opener = createSecretOpener(keys.privateKey);
+  const pdfCalls: { kind: 'html' | 'office'; input: string | Buffer }[] = [];
+  const pdf = {
+    calls: pdfCalls,
+    async htmlToPdf(html: string) {
+      pdfCalls.push({ kind: 'html' as const, input: html });
+      return Buffer.from(`%PDF-1.7 fake ${html.length}`);
+    },
+    async officeToPdf(file: Buffer) {
+      pdfCalls.push({ kind: 'office' as const, input: file });
+      return Buffer.from(`%PDF-1.7 fake office ${file.length}`);
+    },
+  };
   const app = await buildApp({
     db,
     cfg,
@@ -75,7 +103,14 @@ export async function createTestContext(): Promise<TestContext> {
     queue: {
       enqueueRegisterNotify: async (id) => void enqueued.push(id),
       enqueueDispatchNotify: async (id) => void dispatched.push(id),
+      enqueuePlanDeliveries: async (submissionId) =>
+        void jobs.push({ name: 'plan', data: { submissionId } }),
+      enqueueDelivery: async (job, _trx, startAfter) =>
+        void jobs.push({ name: 'deliver', data: { ...job }, startAfter }),
+      enqueueTest: async (testId) => void jobs.push({ name: 'test', data: { testId } }),
     },
+    sealer: createSecretSealer(keys.publicKey),
+    pdf,
   });
   const fx = await seedFixture(owner);
 
@@ -87,6 +122,9 @@ export async function createTestContext(): Promise<TestContext> {
     fx,
     enqueued,
     dispatched,
+    jobs,
+    opener,
+    pdf,
     async close() {
       await app.close();
       await db.destroy();

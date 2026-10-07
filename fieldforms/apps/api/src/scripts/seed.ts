@@ -381,7 +381,13 @@ async function main(db: Db) {
 
   // ------------------------------------------------------------ a week of history
   const settings = DEFAULT_SETTINGS;
-  const queue = { enqueueRegisterNotify: async () => {}, enqueueDispatchNotify: async () => {} };
+  const queue = {
+    enqueueRegisterNotify: async () => {},
+    enqueueDispatchNotify: async () => {},
+    enqueuePlanDeliveries: async () => {},
+    enqueueDelivery: async () => {},
+    enqueueTest: async () => {},
+  };
   const today = localDate(new Date());
   let registers = 0;
 

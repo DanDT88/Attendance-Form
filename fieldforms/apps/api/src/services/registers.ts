@@ -21,6 +21,19 @@ export interface JobQueue {
   enqueueRegisterNotify(submissionId: string): Promise<void>;
   /** Ask the worker to email the assignees of a dispatched form. Safe to call more than once. */
   enqueueDispatchNotify(dispatchId: string): Promise<void>;
+  /**
+   * Phase 3. Each takes the caller's transaction (`trx`) so the job commits with the rows it is
+   * about (pg-boss's `db` option): a job is never lost after its rows commit, nor sent for rows
+   * that rolled back. Duplicate jobs are harmless; the deliveries row decides.
+   */
+  enqueuePlanDeliveries(submissionId: string, trx: Db): Promise<void>;
+  enqueueDelivery(
+    job: { deliveryId: string; generation: number },
+    trx: Db,
+    startAfter?: Date,
+  ): Promise<void>;
+  /** A connection check or test send (destination_tests row), run by the worker. */
+  enqueueTest(testId: string, trx: Db): Promise<void>;
 }
 
 export interface CreateRegisterResult {

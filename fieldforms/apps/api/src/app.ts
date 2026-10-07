@@ -9,8 +9,16 @@ import type { BlobStore } from './lib/blobstore.js';
 import { HttpError } from './lib/errors.js';
 import { adminRoutes } from './routes/admin.js';
 import { attendanceRoutes } from './routes/attendance.js';
+import type { SecretSealer } from './lib/secrets.js';
+import type { PdfConverter } from './outputs/types.js';
+import { apiKeysRoutes } from './routes/api-keys.js';
 import { authRoutes } from './routes/auth.js';
+import { connectionsRoutes } from './routes/connections.js';
+import { deliveriesRoutes } from './routes/deliveries.js';
+import { destinationsRoutes } from './routes/destinations.js';
 import { formRoutes } from './routes/forms.js';
+import { publicApiRoutes } from './routes/public-api.js';
+import { templatesRoutes } from './routes/templates.js';
 import type { JobQueue } from './services/registers.js';
 
 export interface AppDeps {
@@ -18,6 +26,10 @@ export interface AppDeps {
   cfg: Config;
   blobStore: BlobStore;
   queue: JobQueue;
+  /** Seals destination secrets; the API can never open them (only the worker can). */
+  sealer: SecretSealer;
+  /** Gotenberg, for in-app downloads and template previews. */
+  pdf: PdfConverter;
 }
 
 export async function buildApp(
@@ -62,9 +74,15 @@ export async function buildApp(
       await attendanceRoutes(api, deps);
       await adminRoutes(api, deps);
       await formRoutes(api, deps);
+      await connectionsRoutes(api, deps);
+      await destinationsRoutes(api, deps);
+      await templatesRoutes(api, deps);
+      await deliveriesRoutes(api, deps);
+      await apiKeysRoutes(api, deps);
     },
     { prefix: '/api' },
   );
+  await app.register(async (v1) => publicApiRoutes(v1, deps), { prefix: '/api/v1' });
 
   return app;
 }

@@ -11,6 +11,9 @@ export interface CompaniesTable {
   id: Generated<string>;
   name: string;
   report_recipients: ColumnType<string[], string[] | undefined, string[]>;
+  brand_colour: ColumnType<string | null, string | null | undefined, string | null>;
+  logo_blob_id: ColumnType<string | null, string | null | undefined, string | null>;
+  document_footer: ColumnType<string | null, string | null | undefined, string | null>;
   created_at: TimestampDefault;
   deactivated_at: Timestamp | null;
 }
@@ -212,6 +215,7 @@ export interface AuditLogTable {
   id: Generated<number>;
   at: TimestampDefault;
   actor_user_id: string | null;
+  actor_api_key_id: ColumnType<string | null, string | null | undefined, string | null>;
   action: string;
   entity: string | null;
   entity_id: string | null;
@@ -223,6 +227,7 @@ export interface AuditLogTable {
 export interface FormsTable {
   id: Generated<string>;
   name: string;
+  document_templates: ColumnType<unknown, string | undefined, string>;
   draft_definition: Json;
   draft_updated_at: TimestampDefault;
   draft_updated_by: string | null;
@@ -312,6 +317,243 @@ export interface FormSubmissionFilesTable {
   kind: 'image' | 'annotation' | 'signature';
 }
 
+// ---------------------------------------------------------------- Phase 3
+
+/** A jsonb column that may be NULL. */
+type JsonNullable = ColumnType<unknown, string | null | undefined, string | null>;
+type JsonDefault = ColumnType<unknown, string | undefined, string>;
+type Bytes = ColumnType<Buffer, Buffer, Buffer>;
+type Default<T> = ColumnType<T, T | undefined, T>;
+
+export interface OutputTemplatesTable {
+  id: Generated<string>;
+  name: string;
+  kind: 'html' | 'docx';
+  created_by: string | null;
+  created_at: TimestampDefault;
+  archived_at: Timestamp | null;
+}
+
+export interface OutputTemplateVersionsTable {
+  id: Generated<string>;
+  template_id: string;
+  version: number;
+  content_text: string | null;
+  content_bytes: ColumnType<Buffer | null, Buffer | null | undefined, never>;
+  sha256: string;
+  placeholders: JsonDefault;
+  created_by: string | null;
+  created_at: TimestampDefault;
+}
+
+export interface TemplateFormsTable {
+  template_id: string;
+  form_id: string;
+}
+
+export type ConnectionKindColumn =
+  'webhook' | 'sftp' | 's3' | 'google' | 'microsoft' | 'slack' | 'sql';
+
+export interface ConnectionsTable {
+  id: Generated<string>;
+  name: string;
+  kind: ConnectionKindColumn;
+  config: JsonDefault;
+  secrets: string | null;
+  secret_keys: Default<string[]>;
+  secrets_version: Default<number>;
+  secret_expires_on: DateString | null;
+  revision: Default<number>;
+  last_check_at: Timestamp | null;
+  last_check_ok: boolean | null;
+  last_check_detail: string | null;
+  created_by: string | null;
+  created_at: TimestampDefault;
+  updated_by: string | null;
+  updated_at: TimestampDefault;
+  archived_at: Timestamp | null;
+}
+
+export interface ConnectionRevisionsTable {
+  id: Generated<string>;
+  connection_id: string;
+  revision: number;
+  name: string;
+  config: Json;
+  secrets_version: number;
+  secrets_reset: ColumnType<boolean, boolean | undefined, never>;
+  archived: ColumnType<boolean, boolean | undefined, never>;
+  created_by: string | null;
+  created_at: TimestampDefault;
+}
+
+export type DestinationKindColumn =
+  | 'email'
+  | 'webhook'
+  | 'sftp'
+  | 's3'
+  | 'google_drive'
+  | 'onedrive'
+  | 'slack'
+  | 'sql'
+  | 'google_sheets';
+export type FormatColumn = 'pdf' | 'docx' | 'xlsx' | 'json' | 'xml' | 'images';
+
+export interface DestinationsTable {
+  id: Generated<string>;
+  form_id: string;
+  name: string;
+  kind: DestinationKindColumn;
+  connection_id: string | null;
+  formats: Default<FormatColumn[]>;
+  templates: JsonDefault;
+  condition: string | null;
+  settings: JsonDefault;
+  include: JsonDefault;
+  recipient: string | null;
+  cross_border: Default<boolean>;
+  active: Default<boolean>;
+  revision: Default<number>;
+  failing_since: Timestamp | null;
+  consecutive_failures: Default<number>;
+  last_success_at: Timestamp | null;
+  last_failure_at: Timestamp | null;
+  incident_alerted_at: Timestamp | null;
+  created_by: string | null;
+  created_at: TimestampDefault;
+  updated_by: string | null;
+  updated_at: TimestampDefault;
+  archived_at: Timestamp | null;
+}
+
+export interface DestinationRevisionsTable {
+  id: Generated<string>;
+  destination_id: string;
+  revision: number;
+  name: string;
+  connection_id: string | null;
+  formats: FormatColumn[];
+  templates: Json;
+  condition: string | null;
+  settings: Json;
+  include: Json;
+  recipient: string | null;
+  cross_border: boolean;
+  active: boolean;
+  archived: ColumnType<boolean, boolean | undefined, never>;
+  created_by: string | null;
+  created_at: TimestampDefault;
+}
+
+export interface RenderedDocumentsTable {
+  cache_key: string;
+  submission_id: string;
+  format: FormatColumn;
+  template_version_id: string | null;
+  files: Json;
+  created_at: TimestampDefault;
+}
+
+export interface DeliveryPlansTable {
+  submission_id: string;
+  planned_at: TimestampDefault;
+}
+
+export type DeliveryStatusColumn =
+  'pending' | 'sending' | 'delivered' | 'failed' | 'skipped' | 'cancelled';
+
+export interface DeliveriesTable {
+  id: Generated<string>;
+  submission_id: string;
+  destination_id: string;
+  status: DeliveryStatusColumn;
+  generation: Default<number>;
+  attempt_count: Default<number>;
+  next_attempt_at: TimestampDefault;
+  lease_token: string | null;
+  lease_until: Timestamp | null;
+  template_version_ids: JsonNullable;
+  target: JsonNullable;
+  last_error: string | null;
+  last_error_class: string | null;
+  delivered_at: Timestamp | null;
+  created_at: TimestampDefault;
+  updated_at: TimestampDefault;
+}
+
+export type AttemptOutcomeColumn =
+  'delivered' | 'already_present' | 'retry' | 'failed' | 'skipped' | 'cancelled' | 'abandoned';
+
+export interface DeliveryAttemptsTable {
+  id: Generated<string>;
+  delivery_id: string;
+  generation: number;
+  attempt_no: number;
+  outcome: AttemptOutcomeColumn;
+  detail: string | null;
+  destination_revision_id: string | null;
+  connection_revision_id: string | null;
+  template_version_ids: JsonNullable;
+  documents: JsonNullable;
+  target: JsonNullable;
+  evidence: JsonNullable;
+  job_id: string | null;
+  worker: string | null;
+  started_at: Timestamp;
+  finished_at: TimestampDefault;
+  triggered_by: string | null;
+}
+
+export type TestStatusColumn = 'queued' | 'running' | 'ok' | 'failed';
+
+export interface DestinationTestsTable {
+  id: Generated<string>;
+  kind: 'check' | 'test_send';
+  connection_id: string | null;
+  destination_id: string | null;
+  draft_kind: ConnectionKindColumn | null;
+  draft_config: JsonNullable;
+  draft_secrets: string | null;
+  submission_id: string | null;
+  status: Default<TestStatusColumn>;
+  result: JsonNullable;
+  requested_by: string;
+  created_at: TimestampDefault;
+  finished_at: Timestamp | null;
+}
+
+export interface DeliveryAlertsTable {
+  id: Generated<string>;
+  kind: 'incident' | 'reminder' | 'recovered' | 'system_email' | 'secret_expiry';
+  destination_id: string | null;
+  connection_id: string | null;
+  recipients: string[];
+  items: JsonDefault;
+  sent_at: TimestampDefault;
+}
+
+export interface ApiKeysTable {
+  id: Generated<string>;
+  name: string;
+  prefix: string;
+  key_hash: Bytes;
+  scopes: string[];
+  all_sites: Default<boolean>;
+  form_ids: string[] | null;
+  created_by: string;
+  created_at: TimestampDefault;
+  expires_at: Timestamp | null;
+  last_used_at: Timestamp | null;
+  revoked_at: Timestamp | null;
+  revoked_by: string | null;
+}
+
+export interface ApiKeyScopesTable {
+  api_key_id: string;
+  scope_type: 'company' | 'region' | 'site';
+  scope_id: string;
+}
+
 export interface Database {
   companies: CompaniesTable;
   regions: RegionsTable;
@@ -339,6 +581,21 @@ export interface Database {
   dispatches: DispatchesTable;
   form_submissions: FormSubmissionsTable;
   form_submission_files: FormSubmissionFilesTable;
+  output_templates: OutputTemplatesTable;
+  output_template_versions: OutputTemplateVersionsTable;
+  template_forms: TemplateFormsTable;
+  connections: ConnectionsTable;
+  connection_revisions: ConnectionRevisionsTable;
+  destinations: DestinationsTable;
+  destination_revisions: DestinationRevisionsTable;
+  rendered_documents: RenderedDocumentsTable;
+  delivery_plans: DeliveryPlansTable;
+  deliveries: DeliveriesTable;
+  delivery_attempts: DeliveryAttemptsTable;
+  destination_tests: DestinationTestsTable;
+  delivery_alerts: DeliveryAlertsTable;
+  api_keys: ApiKeysTable;
+  api_key_scopes: ApiKeyScopesTable;
 }
 
 export type User = Selectable<UsersTable>;
