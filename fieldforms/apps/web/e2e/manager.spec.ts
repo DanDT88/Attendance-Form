@@ -66,3 +66,34 @@ test('manager adds a missing clock-out and corrects an entry, with reasons and h
   await expect(page.getByText('register.manual_event').first()).toBeVisible();
   await expect(page.getByText('attendance.report_view').first()).toBeVisible();
 });
+
+test('an absence corrected to present needs and gets an arrival time', async ({ page }) => {
+  await signInAsAdmin(page);
+  const twoDaysAgo = await page.evaluate(() =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(
+      new Date(Date.now() - 2 * 86_400_000),
+    ),
+  );
+  await page.getByLabel('From', { exact: true }).fill(twoDaysAgo);
+  await page.getByLabel('To', { exact: true }).fill(twoDaysAgo);
+  const absent = page
+    .getByTestId('report')
+    .locator('tbody > tr')
+    .filter({ has: page.getByRole('cell', { name: 'absent', exact: true }) })
+    .first();
+  await expect(absent).toBeVisible();
+  const name = (await absent.locator('td').nth(1).innerText()).split('\n')[0]!;
+  await absent.getByRole('link', { name: 'Register 1' }).click();
+
+  const entry = page.locator('tr', { hasText: name }).first();
+  await entry.getByRole('button', { name: 'Correct' }).click();
+  await page.locator('form.inline-form select').first().selectOption('present');
+  await page.getByPlaceholder('Reason for correction (required)').fill('Signed in at the gate');
+  const arrived = page.getByLabel('Arrived at');
+  await expect(arrived).toBeVisible();
+  await arrived.fill('07:10');
+  await page.getByRole('button', { name: 'Save correction' }).click();
+  await expect(entry).toContainText('IN');
+  await expect(entry).toContainText('07:10');
+  await expect(entry).toContainText('Corrected');
+});

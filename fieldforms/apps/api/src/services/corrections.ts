@@ -1,4 +1,4 @@
-import { correctionInput, type CorrectableFields } from '@fieldforms/shared';
+import { correctionInput, resolveShiftTime, type CorrectableFields } from '@fieldforms/shared';
 import type { Db } from '../db/index.js';
 import { assertSite, type AuthUser } from '../auth/scope.js';
 import { badRequest, notFound } from '../lib/errors.js';
@@ -19,11 +19,12 @@ export async function addCorrection(
   if (!parsed.success) {
     throw badRequest(parsed.error.issues.map((i) => i.message).join('; '), parsed.error.issues);
   }
-  const { changes, reason } = parsed.data;
+  const { changes, reason, time } = parsed.data;
 
   const current = await db
     .selectFrom('attendance_entries_effective as e')
     .innerJoin('register_submissions as r', 'r.id', 'e.submission_id')
+    .leftJoin('shifts as sh', 'sh.id', 'r.shift_id')
     .select([
       'e.id',
       'e.status',
@@ -33,6 +34,10 @@ export async function addCorrection(
       'e.reason',
       'e.replacement_employee_id',
       'r.site_id',
+      'r.kind',
+      'r.work_date',
+      'sh.start_time',
+      'sh.end_time',
     ])
     .where('e.id', '=', entryId)
     .executeTakeFirst();
@@ -50,9 +55,33 @@ export async function addCorrection(
   const newValues: CorrectableFields = { ...oldValues, ...changes };
   if (newValues.eventAt) newValues.eventAt = new Date(newValues.eventAt).toISOString();
 
+  // What the line means as a clock event when the manager does not say: leaving early or closing
+  // a shift is an OUT, anything else an IN. A status change re-derives it.
+  const defaultEvent = (): 'in' | 'out' =>
+    newValues.status === 'left_early' || current.kind === 'end' ? 'out' : 'in';
+  if (time !== undefined) {
+    if (!current.start_time || !current.end_time) {
+      throw badRequest('This register has no shift, so give the full date and time instead');
+    }
+    newValues.eventAt = resolveShiftTime(current.work_date, time, {
+      startTime: current.start_time.slice(0, 5),
+      endTime: current.end_time.slice(0, 5),
+    }).toISOString();
+  }
+  if (newValues.eventAt && changes.event === undefined) {
+    // Re-derive only when a new time comes with a new status, or there was no event before:
+    // a status change alone must not turn someone's arrival into a departure.
+    const statusChanged = changes.status !== undefined && changes.status !== oldValues.status;
+    if (newValues.event === null || (time !== undefined && statusChanged))
+      newValues.event = defaultEvent();
+  }
+
   if (newValues.status === 'absent') {
     newValues.event = null;
     newValues.eventAt = null;
+  }
+  if (newValues.status !== 'absent' && newValues.event === null) {
+    throw badRequest('Give the time they arrived or left; only an absence has no clock time');
   }
   if ((newValues.event === null) !== (newValues.eventAt === null)) {
     throw badRequest('An event needs a time, and a time needs an event');
@@ -87,7 +116,7 @@ export async function addCorrection(
       action: 'attendance.correct',
       entity: 'attendance_entry',
       entityId: entryId,
-      details: { correctionId: row.id, reason, changes },
+      details: { correctionId: row.id, reason, changes, time },
     });
     return row.id;
   });

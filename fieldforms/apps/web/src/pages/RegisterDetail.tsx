@@ -1,4 +1,4 @@
-import { formatLocal, localTime, timeToMinutes } from '@fieldforms/shared';
+import { formatLocal, localTime } from '@fieldforms/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -237,7 +237,8 @@ function CorrectionForm({
 }) {
   const qc = useQueryClient();
   const [status, setStatus] = useState(e.status);
-  const [time, setTime] = useState(e.event_at ? localTime(new Date(e.event_at)) : '');
+  const originalTime = e.event_at ? localTime(new Date(e.event_at)) : '';
+  const [time, setTime] = useState(originalTime);
   const [minutes, setMinutes] = useState(e.minutes?.toString() ?? '');
   const [note, setNote] = useState(e.reason ?? '');
   const [reason, setReason] = useState('');
@@ -253,23 +254,12 @@ function CorrectionForm({
           reason: note || null,
           minutes: minutes ? Number(minutes) : null,
         };
-        if (status === 'absent') {
-          changes.event = null;
-          changes.eventAt = null;
-        } else if (time) {
-          // Move the original event to the new clock time by the shortest way round the clock, so a
-          // night-shift time stays on the right calendar day.
-          if (e.event_at) {
-            const base = new Date(e.event_at);
-            let delta = (timeToMinutes(time) ?? 0) - (timeToMinutes(localTime(base)) ?? 0);
-            if (delta > 720) delta -= 1440;
-            if (delta < -720) delta += 1440;
-            changes.eventAt = new Date(base.getTime() + delta * 60_000).toISOString();
-          }
-          changes.event = e.event ?? (status === 'left_early' ? 'out' : 'in');
-        }
+        // The server turns the local time into an instant using the register's shift and work
+        // date, so night-shift times after midnight land on the right day.
+        const body: Record<string, unknown> = { changes, reason };
+        if (status !== 'absent' && time && time !== originalTime) body.time = time;
         try {
-          await api(`/entries/${e.id}/corrections`, { method: 'POST', body: { changes, reason } });
+          await api(`/entries/${e.id}/corrections`, { method: 'POST', body });
           await qc.invalidateQueries({ queryKey: ['register', registerId] });
           await qc.invalidateQueries({ queryKey: ['report'] });
           onDone();
@@ -284,13 +274,16 @@ function CorrectionForm({
         <option value="absent">Absent</option>
         <option value="left_early">Left early</option>
       </select>
-      {status !== 'absent' && e.event_at && (
-        <input
-          type="time"
-          value={time}
-          onChange={(ev) => setTime(ev.target.value)}
-          title="Event time"
-        />
+      {status !== 'absent' && (
+        <label className="inline small">
+          {status === 'left_early' || e.event === 'out' ? 'Left at' : 'Arrived at'}
+          <input
+            type="time"
+            value={time}
+            required={!e.event_at}
+            onChange={(ev) => setTime(ev.target.value)}
+          />
+        </label>
       )}
       <input
         type="number"

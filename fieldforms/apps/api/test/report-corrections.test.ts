@@ -312,3 +312,59 @@ describe('corrections', () => {
     expect(audits.every((a) => a.entity_id === entryId)).toBe(true);
   });
 });
+
+describe('correcting an absence into a presence', () => {
+  let entryId: string;
+  beforeAll(async () => {
+    const sub = await register('start', '2026-09-11', t.fx.nightShiftA, [
+      { employeeId: t.fx.employeesA[1], status: 'absent', reason: 'Marked absent in error' },
+    ]);
+    entryId = (
+      await t.owner
+        .selectFrom('attendance_entries')
+        .select('id')
+        .where('submission_id', '=', sub)
+        .executeTakeFirstOrThrow()
+    ).id;
+  });
+  const correct = (payload: unknown) =>
+    t.app.inject({
+      method: 'POST',
+      url: `/api/entries/${entryId}/corrections`,
+      headers: { ...H, cookie: mgr },
+      payload: payload as object,
+    });
+
+  it('refuses a present or late entry without a clock time', async () => {
+    const res = await correct({ changes: { status: 'present' }, reason: 'Was on site' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/time/i);
+  });
+
+  it('resolves a local time against the register’s shift, across midnight', async () => {
+    const res = await correct({
+      changes: { status: 'late', minutes: 20 },
+      time: '18:20',
+      reason: 'Gate log shows arrival',
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json().values).toMatchObject({
+      status: 'late',
+      event: 'in',
+      eventAt: '2026-09-11T16:20:00.000Z',
+    });
+    const row = (await report('from=2026-09-11&to=2026-09-11')).find(
+      (r) => r.employeeId === t.fx.employeesA[1],
+    )!;
+    expect(row).toMatchObject({ status: 'late', firstIn: '2026-09-11T16:20:00.000Z' });
+
+    // Left early after midnight on a night shift: an OUT on the next calendar day.
+    const out = await correct({
+      changes: { status: 'left_early', minutes: 240 },
+      time: '02:00',
+      reason: 'Left at 2am, per the guard',
+    });
+    expect(out.statusCode, out.body).toBe(201);
+    expect(out.json().values).toMatchObject({ event: 'out', eventAt: '2026-09-12T00:00:00.000Z' });
+  });
+});
