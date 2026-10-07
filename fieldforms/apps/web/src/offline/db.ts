@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { OutboxItem, OutboxStore, StoredBlob } from '@fieldforms/shared';
+import type { OutboxItem, OutboxStore, StoredBlob } from '@fieldforms/shared/sync';
 
 export interface BlobRow {
   id: string;

@@ -1,4 +1,4 @@
-import { runSync, type SyncReport } from '@fieldforms/shared';
+import { runSync, type SyncReport } from '@fieldforms/shared/sync';
 import { currentOwnerId, dexieOutboxStore, pruneSynced, requeue } from './db';
 import { fetchTransport } from './transport';
 

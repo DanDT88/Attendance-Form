@@ -1,4 +1,4 @@
-import { classifyHttpStatus, type SyncTransport } from '@fieldforms/shared';
+import { classifyHttpStatus, type SyncTransport } from '@fieldforms/shared/sync';
 
 export const CSRF_HEADER = { 'x-fieldforms': '1' } as const;
 
