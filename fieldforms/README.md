@@ -16,6 +16,11 @@ platform and the legacy Google Apps Script attendance app at the root of this re
   numbered versions. Anyone can fill them in on a phone, offline too, with calculations, show/hide
   rules, photos with markup, signatures, barcode scanning and repeating rows. Managers send a form
   as a pre-filled task to a person or a group, who get it in their inbox and by email.
+- **Outputs and destinations**: every submission can become a branded PDF, Word, Excel, JSON or
+  XML document (built-in layouts, Word or HTML templates) and be delivered automatically to email,
+  webhooks, SFTP, S3, Google Drive, Google Sheets, OneDrive/SharePoint, Slack or a SQL table
+  (PostgreSQL or SQL Server), with conditions, retries, a delivery log, resend and alerts. Other
+  systems can pull submissions through a REST API with API keys.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and [TASKS.md](TASKS.md) for the roadmap.
 
@@ -139,6 +144,28 @@ because their passwords are stored in plain text: create supervisors and PINs in
 
 5. Back up the `pgdata` and `blobs` volumes (or use S3 for photos). Attendance must be kept for at
    least three years (BCEA).
+6. Destinations: run `pnpm secrets-keygen` (or `docker compose run --rm --no-deps worker node
+dist/secrets-keygen.js`) and put `SECRETS_PUBLIC_KEY` in the API's environment and
+   `SECRETS_PRIVATE_KEY` in the worker's only (the compose file's defaults are a development key
+   pair). Set `GOTENBERG_PASSWORD`, and `DESTINATIONS_ALLOWED_PRIVATE_CIDRS` if a destination is
+   on your own network (an on-premises SFTP or SQL server). To rotate the key pair: deploy the
+   new pair with the old private key as `SECRETS_PRIVATE_KEY_PREVIOUS`, run
+   `node dist/rotate-secrets.js` in the worker container, then remove the old key.
+
+### Destinations: least-privilege set-up
+
+Give each connection only what it needs, since FieldForms stores its credentials:
+
+- **Google Drive / Sheets:** a service account with no domain-wide delegation; share only the
+  target Shared Drive folder or sheet with its email (Admin → Connections → Check shows it).
+  Drive needs a Google Workspace Shared Drive: service accounts cannot store files in My Drive.
+- **OneDrive / SharePoint:** an Entra app with the `Sites.Selected` application permission,
+  granted on the target site only (not `Files.ReadWrite.All`).
+- **S3:** an access key allowed `s3:PutObject` and `s3:GetObject` on one bucket prefix.
+- **SQL:** a login with `INSERT`, `UPDATE` and `SELECT` on the one table, which needs a unique
+  index on the key column. For systems inside your network, prefer pulling from the REST API
+  (`docs/examples/sync-submissions.mjs`): it needs no inbound firewall rule.
+- **SFTP:** pin the server's host key (the check shows the fingerprint).
 
 ### Single sign-on (managers and admins)
 
