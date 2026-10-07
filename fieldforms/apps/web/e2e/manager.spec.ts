@@ -1,21 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
+import { signInOffice } from './helpers';
 
 /*
  * The seed leaves the last site's day shift unclosed yesterday, so its staff show "Missing OUT".
  * A manager fixes one with a reason, then corrects an entry; originals are kept and audited.
  */
 
-async function signInAsAdmin(page: Page) {
-  await page.goto('/login');
-  await page.getByRole('button', { name: 'Office' }).click();
-  await page.getByLabel('Email').fill('admin@fieldforms.local');
-  await page.getByLabel('Password').fill('fieldforms-dev-admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  const accept = page.getByRole('button', { name: /I have read and accept/ });
-  await expect(accept.or(page.getByTestId('report'))).toBeVisible();
-  if (await accept.isVisible()) await accept.click();
-  await expect(page.getByTestId('report')).toBeVisible();
-}
+const signInAsAdmin = (page: Page) =>
+  signInOffice(page, 'admin@fieldforms.local', 'fieldforms-dev-admin');
 
 test('manager adds a missing clock-out and corrects an entry, with reasons and history', async ({
   page,
