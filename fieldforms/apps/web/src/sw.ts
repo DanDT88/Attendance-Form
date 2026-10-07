@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { runSync } from '@fieldforms/shared';
+import { runSync } from '@fieldforms/shared/sync';
 import { clientsClaim } from 'workbox-core';
 import {
   cleanupOutdatedCaches,

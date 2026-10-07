@@ -19,6 +19,8 @@ import { audit, type AuditContext } from './audit.js';
 export interface JobQueue {
   /** Ask the worker to email the register summary. Safe to call more than once per submission. */
   enqueueRegisterNotify(submissionId: string): Promise<void>;
+  /** Ask the worker to email the assignees of a dispatched form. Safe to call more than once. */
+  enqueueDispatchNotify(dispatchId: string): Promise<void>;
 }
 
 export interface CreateRegisterResult {

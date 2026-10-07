@@ -189,7 +189,8 @@ export interface EntryCorrectionsTable {
 
 export interface NotificationLogTable {
   id: Generated<string>;
-  submission_id: string;
+  submission_id: string | null;
+  dispatch_id: ColumnType<string | null, string | null | undefined, never>;
   channel: ColumnType<string, string | undefined, never>;
   status: 'sent' | 'failed' | 'skipped';
   recipients: ColumnType<string[], string[] | undefined, never>;
@@ -219,6 +220,98 @@ export interface AuditLogTable {
   details: Json | null;
 }
 
+export interface FormsTable {
+  id: Generated<string>;
+  name: string;
+  draft_definition: Json;
+  draft_updated_at: TimestampDefault;
+  draft_updated_by: string | null;
+  created_by: string | null;
+  created_at: TimestampDefault;
+  archived_at: Timestamp | null;
+}
+
+export interface FormVersionsTable {
+  id: Generated<string>;
+  form_id: string;
+  version: number;
+  definition: Json;
+  published_by: string | null;
+  published_at: TimestampDefault;
+}
+
+export interface OptionListsTable {
+  id: Generated<string>;
+  name: string;
+  items: ColumnType<unknown, string | undefined, string>;
+  updated_at: TimestampDefault;
+  updated_by: string | null;
+  created_at: TimestampDefault;
+  archived_at: Timestamp | null;
+}
+
+export interface UserGroupsTable {
+  id: Generated<string>;
+  name: string;
+  created_at: TimestampDefault;
+  archived_at: Timestamp | null;
+}
+
+export interface UserGroupMembersTable {
+  group_id: string;
+  user_id: string;
+}
+
+export interface DispatchesTable {
+  id: Generated<string>;
+  form_id: string;
+  form_version_id: string;
+  title: string;
+  instructions: string | null;
+  prefill: ColumnType<unknown, string | undefined, string>;
+  site_id: string | null;
+  assigned_user_id: string | null;
+  assigned_group_id: string | null;
+  due_on: string | null;
+  status: ColumnType<
+    'open' | 'completed' | 'cancelled',
+    'open' | undefined,
+    'completed' | 'cancelled'
+  >;
+  created_by: string;
+  created_at: TimestampDefault;
+  completed_at: Timestamp | null;
+  completed_by: string | null;
+  completed_submission_id: string | null;
+  cancelled_at: Timestamp | null;
+  cancelled_by: string | null;
+}
+
+export interface FormSubmissionsTable {
+  id: string;
+  form_id: string;
+  form_version_id: string;
+  dispatch_id: string | null;
+  site_id: string | null;
+  submitted_by: string | null;
+  data: Json;
+  device_captured_at: Timestamp | null;
+  device_sent_at: Timestamp | null;
+  server_received_at: TimestampDefault;
+  clock_skew_seconds: number | null;
+  clock_skew_flag: ColumnType<boolean, boolean | undefined, never>;
+  sync_delay_seconds: number | null;
+  sync_delay_flag: ColumnType<boolean, boolean | undefined, never>;
+  payload: Json | null;
+}
+
+export interface FormSubmissionFilesTable {
+  submission_id: string;
+  blob_id: string;
+  path: string;
+  kind: 'image' | 'annotation' | 'signature';
+}
+
 export interface Database {
   companies: CompaniesTable;
   regions: RegionsTable;
@@ -238,6 +331,14 @@ export interface Database {
   notification_log: NotificationLogTable;
   privacy_requests: PrivacyRequestsTable;
   audit_log: AuditLogTable;
+  forms: FormsTable;
+  form_versions: FormVersionsTable;
+  option_lists: OptionListsTable;
+  user_groups: UserGroupsTable;
+  user_group_members: UserGroupMembersTable;
+  dispatches: DispatchesTable;
+  form_submissions: FormSubmissionsTable;
+  form_submission_files: FormSubmissionFilesTable;
 }
 
 export type User = Selectable<UsersTable>;

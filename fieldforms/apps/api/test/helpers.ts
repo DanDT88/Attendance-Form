@@ -43,6 +43,7 @@ export interface TestContext {
   appPool: pg.Pool;
   fx: Fixture;
   enqueued: string[];
+  dispatched: string[];
   close(): Promise<void>;
 }
 
@@ -66,11 +67,15 @@ export async function createTestContext(): Promise<TestContext> {
     AUTH_RATE_LIMIT_PER_MINUTE: '100000',
   });
   const enqueued: string[] = [];
+  const dispatched: string[] = [];
   const app = await buildApp({
     db,
     cfg,
     blobStore: new LocalBlobStore(blobDir),
-    queue: { enqueueRegisterNotify: async (id) => void enqueued.push(id) },
+    queue: {
+      enqueueRegisterNotify: async (id) => void enqueued.push(id),
+      enqueueDispatchNotify: async (id) => void dispatched.push(id),
+    },
   });
   const fx = await seedFixture(owner);
 
@@ -81,6 +86,7 @@ export async function createTestContext(): Promise<TestContext> {
     appPool,
     fx,
     enqueued,
+    dispatched,
     async close() {
       await app.close();
       await db.destroy();

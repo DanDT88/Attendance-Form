@@ -32,7 +32,8 @@ Tests need Postgres on `localhost:5432` with the compose credentials (override w
 
 - **Attendance is append-only.** `register_submissions`, `attendance_entries`, `entry_corrections`,
   `audit_log`, `notification_log` and `privacy_requests` have triggers that reject UPDATE/DELETE,
-  and the API's DB role (`fieldforms_app`) has no DELETE. Change data by inserting a correction or a
+  and the API's DB role (`fieldforms_app`) has no DELETE (except on `sessions`, `user_scopes` and
+  `user_group_members`). Change data by inserting a correction or a
   manual event, never by updating rows. No hard deletes anywhere: deactivate.
 - **Migrations are plain SQL** in `apps/api/migrations`, applied in name order. Never edit an applied
   migration (the runner checks checksums); add a new file.
@@ -47,11 +48,23 @@ Tests need Postgres on `localhost:5432` with the compose credentials (override w
 - **POPIA:** GPS is read only at submit time. Do not add background location, biometrics or extra
   personal fields without updating the privacy notice in settings.
 - **No secrets in the repo.** Defaults in `docker-compose.yml` are for local development only.
-- **No `eval`/`new Function`** (ESLint enforces this). The Phase 2 expression engine must parse.
+- **No `eval`/`new Function`** (ESLint enforces this). Form expressions go through the parser and
+  tree-walking evaluator in `packages/shared/src/expr`; add functions to the whitelist table in
+  `functions.ts`, with tests, and never let an identifier resolve to a JavaScript object.
+- **Published form versions never change.** Edit the form's draft and publish a new version;
+  submissions point at the exact version they were filled in with. `form_versions`,
+  `form_submissions` and `form_submission_files` are append-only like attendance.
+- **The server re-runs every form** (`evaluateForm`) on the stored version and keeps its own
+  calculated values; keep the runtime deterministic and identical in the browser and in Node.
+- **A task for a site only goes to people who can see that site** (inbox, email and dispatch
+  checks in `services/dispatch.ts` and `myOpenDispatches`).
+- **The service worker imports `@fieldforms/shared/sync`, not the package root**, so zod and the
+  form engine stay out of it.
 
 ## Layout
 
-- `packages/shared` — zod schemas, time and compliance maths, the sync engine (`src/sync/engine.ts`).
+- `packages/shared` — zod schemas, time and compliance maths, the sync engine (`src/sync/engine.ts`),
+  the expression language (`src/expr`) and form definitions and runtime (`src/forms`).
 - `apps/api` — Fastify app (`src/app.ts`), routes, services, auth; `src/worker.ts` (pg-boss jobs);
   `src/scripts` (seed, legacy import, create-admin); `test/` (integration, one DB per file).
 - `apps/web` — React PWA; `src/sw.ts` (service worker), `src/offline` (Dexie outbox, sync triggers),

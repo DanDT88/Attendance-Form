@@ -4,6 +4,7 @@ import type { AuthUser } from '../auth/scope.js';
 import type { BlobStore } from '../lib/blobstore.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { audit, type AuditContext } from './audit.js';
+import { canViewSubmission } from './form-submissions.js';
 
 export const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
@@ -94,6 +95,17 @@ export async function getBlobForUser(
       )
       .executeTakeFirst();
     allowed = !!ref;
+  }
+  if (!allowed && user.role !== 'supervisor') {
+    // A photo or signature in a form submission is visible to whoever may see that submission.
+    const refs = await db
+      .selectFrom('form_submission_files as fsf')
+      .innerJoin('form_submissions as s', 's.id', 'fsf.submission_id')
+      .leftJoin('dispatches as d', 'd.id', 's.dispatch_id')
+      .select(['s.site_id', 's.submitted_by', 'd.created_by as dispatch_created_by'])
+      .where('fsf.blob_id', '=', id)
+      .execute();
+    allowed = refs.some((r) => canViewSubmission(user, r));
   }
   if (!allowed) throw notFound();
 

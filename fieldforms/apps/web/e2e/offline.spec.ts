@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import pg from 'pg';
 import { e2eUrl } from './env';
+import { signInAsSupervisor, waitForServiceWorker } from './helpers';
 
 /*
  * The Phase 1 acceptance test, and its harder variants:
@@ -25,30 +26,30 @@ async function serverCounts(workDate: string) {
   return r.rows[0]!;
 }
 
-async function signInAsSupervisor(page: Page) {
-  await page.goto('/login');
-  await page.getByLabel('Employee number').fill('S001');
-  await page.getByLabel('PIN').fill('482915');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  const accept = page.getByRole('button', { name: /I have read and accept/ });
-  const site = page.getByTestId('site');
-  await expect(accept.or(site)).toBeVisible();
-  if (await accept.isVisible()) await accept.click();
-  await expect(page.getByTestId('site')).toBeVisible();
-  // The roster has been downloaded to the device.
-  await expect(page.locator('[data-testid^="row-"]').first()).toBeVisible();
-}
-
-/** Waits until the service worker controls the page, so a reload works with no network. */
-async function waitForServiceWorker(page: Page) {
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.ready;
-  });
-  if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) {
-    await page.reload();
-    await expect(page.getByTestId('site')).toBeVisible();
-  }
-  expect(await page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+/**
+ * Presses "Sync now" until the outbox item is sent. Each click is bounded, because the button is
+ * disabled while a run is in progress and an unbounded click would stall the retry loop. On
+ * failure the item's status and last error are in the message.
+ */
+async function syncUntilSynced(page: Page) {
+  await expect(async () => {
+    await page.getByTestId('sync-now').click({ timeout: 2_000 });
+    await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', {
+      timeout: 1_000,
+    });
+  })
+    .toPass({ timeout: 20_000 })
+    .catch(async (err: Error) => {
+      const items = await page
+        .getByTestId('outbox-item')
+        .evaluateAll((els) =>
+          els.map(
+            (e) =>
+              `${e.getAttribute('data-status')}: ${(e as HTMLElement).innerText.replace(/\s+/g, ' ')}`,
+          ),
+        );
+      throw new Error(`${err.message}\nOutbox: ${JSON.stringify(items)}`);
+    });
 }
 
 async function fillStartRegister(page: Page, workDate: string) {
@@ -146,12 +147,7 @@ test.describe('with the network intercepted', () => {
 
     await page.getByRole('link', { name: 'Outbox' }).first().click();
     // Retry after the backoff (2-4 s for the first retry).
-    await expect(async () => {
-      await page.getByTestId('sync-now').click();
-      await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', {
-        timeout: 1000,
-      });
-    }).toPass({ timeout: 20_000 });
+    await syncUntilSynced(page);
 
     expect(posts).toBeGreaterThanOrEqual(2);
     expect(await serverCounts(workDate)).toEqual({
@@ -182,12 +178,7 @@ test.describe('with the network intercepted', () => {
     expect((await serverCounts(workDate)).submissions).toBe(0);
 
     down = false;
-    await expect(async () => {
-      await page.getByTestId('sync-now').click();
-      await expect(page.getByTestId('outbox-item')).toHaveAttribute('data-status', 'synced', {
-        timeout: 1000,
-      });
-    }).toPass({ timeout: 20_000 });
+    await syncUntilSynced(page);
     expect((await serverCounts(workDate)).submissions).toBe(1);
   });
 

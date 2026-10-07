@@ -211,7 +211,8 @@ function ReportRow({ r, org }: { r: Row; org: Org | undefined }) {
           {r.lastOut
             ? formatLocal(
                 r.lastOut,
-                r.lastOut.slice(0, 10) === r.firstIn?.slice(0, 10) ? 'HH:mm' : 'dd MMM HH:mm',
+                // Show the date when the shift ended on a later local day (night shifts).
+                formatLocal(r.lastOut, 'yyyy-MM-dd') === r.workDate ? 'HH:mm' : 'dd MMM HH:mm',
               )
             : '—'}
         </td>

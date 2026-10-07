@@ -2,6 +2,7 @@ import PgBoss from 'pg-boss';
 import type { JobQueue } from './services/registers.js';
 
 export const REGISTER_NOTIFY = 'register-notify';
+export const DISPATCH_NOTIFY = 'dispatch-notify';
 
 export const NOTIFY_JOB_OPTIONS = {
   retryLimit: 8,
@@ -39,6 +40,11 @@ export async function createBoss(connectionString: string): Promise<PgBoss> {
   await boss.start();
   await ensureQueue(boss, `${REGISTER_NOTIFY}-dead`);
   await ensureQueue(boss, REGISTER_NOTIFY, NOTIFY_JOB_OPTIONS);
+  await ensureQueue(boss, `${DISPATCH_NOTIFY}-dead`);
+  await ensureQueue(boss, DISPATCH_NOTIFY, {
+    ...NOTIFY_JOB_OPTIONS,
+    deadLetter: `${DISPATCH_NOTIFY}-dead`,
+  });
   return boss;
 }
 
@@ -50,6 +56,13 @@ export function bossQueue(boss: PgBoss): JobQueue {
         REGISTER_NOTIFY,
         { submissionId },
         { ...NOTIFY_JOB_OPTIONS, singletonKey: submissionId },
+      );
+    },
+    async enqueueDispatchNotify(dispatchId) {
+      await boss.send(
+        DISPATCH_NOTIFY,
+        { dispatchId },
+        { ...NOTIFY_JOB_OPTIONS, deadLetter: `${DISPATCH_NOTIFY}-dead`, singletonKey: dispatchId },
       );
     },
   };

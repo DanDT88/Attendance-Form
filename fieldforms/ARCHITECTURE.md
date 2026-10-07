@@ -231,12 +231,135 @@ This is a single-destination version of the Phase 3 destinations system.
 - It prints a reconciliation (rows read, imported, skipped, rejected with reasons).
 - Legacy plain-text passwords are **not** imported. Supervisors are given new PINs.
 
+## Phase 2: forms
+
+Attendance stays as it is: a purpose-built register with its own tables and report. Phase 2 adds a
+general form engine beside it for inspections, checklists and reports.
+
+### Definitions and versions
+
+- A **form** has an editable **draft definition** (JSON) and a list of **published versions**.
+  Publishing validates the draft strictly and copies it into `form_versions` with the next
+  version number. Published versions are append-only (database trigger), so a submission always
+  points at exactly the definition it was filled in with (`form_submissions.form_version_id`).
+- A definition is plain JSON, validated by zod in `packages/shared/src/forms`:
+
+  ```json
+  {
+    "schemaVersion": 1,
+    "title": "Site inspection",
+    "settings": { "siteRequired": true },
+    "fields": [
+      {
+        "id": "area",
+        "type": "select",
+        "label": "Area",
+        "required": true,
+        "options": { "source": "list", "listId": "…" }
+      },
+      {
+        "id": "items",
+        "type": "group",
+        "label": "Items",
+        "minRows": 1,
+        "fields": [
+          { "id": "qty", "type": "number", "label": "Qty", "min": 0 },
+          { "id": "price", "type": "number", "label": "Price" },
+          {
+            "id": "line_total",
+            "type": "calculated",
+            "label": "Total",
+            "expression": "qty * price"
+          }
+        ]
+      },
+      {
+        "id": "grand_total",
+        "type": "calculated",
+        "label": "Grand total",
+        "expression": "ROUND(SUM(items.line_total), 2)"
+      },
+      {
+        "id": "fault_photo",
+        "type": "image",
+        "label": "Photo of the fault",
+        "annotate": true,
+        "visibleIf": "grand_total > 1000"
+      }
+    ]
+  }
+  ```
+
+- **Field types:** `text`, `number`, `select` and `multiselect` (options inline, or from a managed
+  list that can be loaded from CSV), `date`, `time`, `datetime`, `calculated`, `geotag`, `image`
+  (with an annotation layer), `signature`, `barcode` (QR and 1D), `group` (repeating rows) and
+  `note` (instructions, no value).
+- Every field can have `required` (true or an expression), `visibleIf` (an expression) and
+  `validations` (expressions with messages). Hidden fields are not required, are not validated,
+  and their values are dropped on submit.
+- Field ids are unique within their scope (the form, or one repeat group). Publishing checks that
+  every expression parses, refers only to existing fields, and that calculated fields do not
+  depend on each other in a cycle.
+
+### Expression language
+
+A small spreadsheet-like language, parsed (tokenizer + Pratt parser → AST) and evaluated by walking
+the tree. There is no `eval` or `new Function` anywhere, and nothing in an expression can reach
+JavaScript objects: identifiers only resolve to form values, and functions come from a fixed table.
+
+- **Values:** numbers, text (`"…"` or `'…'`), `TRUE`/`FALSE`, `NULL`, and lists (a repeat group
+  column or a multi-select).
+- **Operators:** `+ - * / %`, comparison `= <> != < <= > >=`, `AND OR NOT`, `&` for joining
+  text, and parentheses.
+- **References:** a field id (`qty`). Inside a repeat group, a sibling field in the same row
+  wins over a form-level field; `group.field` gives the whole column as a list.
+- **Functions:** `IF`, `AND`, `OR`, `NOT`, `SUM`, `AVG`, `MIN`, `MAX`, `COUNT`, `ROUND`, `FLOOR`,
+  `CEIL`, `ABS`, `CONCAT`, `LEN`, `UPPER`, `LOWER`, `TRIM`, `ISBLANK`, `COALESCE`, `CONTAINS`,
+  `TODAY`, `NOW`, `DATEDIFF(end, start, "days"|"hours"|"minutes")`, `DATEADD`, `YEAR`, `MONTH`,
+  `DAY`.
+- **Errors never throw out of the evaluator:** a bad value (text in arithmetic, division by zero)
+  evaluates to blank with an error message for the builder to show. Limits on expression length,
+  nesting depth and evaluation steps keep a hostile expression from hanging a phone or the API.
+- The same engine runs in the browser (live calculation, show/hide) and on the server, which
+  re-evaluates every submission and stores its own computed values.
+
+### Submissions, drafts and offline
+
+- `form_submissions` is append-only and keyed by a UUID made on the device (idempotent, like
+  registers). It stores the answers as JSON, the site, the device and server timestamps with the
+  same clock flags as registers, and the photos and signatures as blob ids
+  (`form_submission_files`), which also decide who may view them.
+- The Phase 1 outbox and sync engine carry form submissions too (`type: 'form'`), with the same
+  retry, backoff and status chip. Photos are compressed on the device; an annotated photo is
+  stored as the untouched original plus a separate transparent annotation layer.
+- Drafts are saved on the phone as you type (IndexedDB) and can be resumed or discarded.
+- The offline bootstrap now also downloads the published forms the user may fill in, the option
+  lists they use, and the user's inbox.
+
+### Dispatch
+
+- A manager or admin dispatches a form to **a user or a group** (`user_groups`), optionally for
+  a site, with a due date and pre-filled answers. The form version is fixed at dispatch time.
+- It appears in the assignee's inbox (offline too). For a group, whoever submits first completes
+  it for everyone. Dispatches can be cancelled; they are never deleted.
+- A task for a site only reaches people whose scope covers that site, because nobody else could
+  submit it. Groups may span sites: members without access to the task's site do not see it and
+  are not emailed, and dispatching to a user (or a group with no member) who cannot see the site
+  is refused.
+- The worker emails each assignee who has an email address. Supervisors may now have an optional
+  email for this; they still sign in with employee number and PIN.
+
+### Who can do what
+
+| Action                                           | Admin | Manager                              | Supervisor |
+| ------------------------------------------------ | ----- | ------------------------------------ | ---------- |
+| Build and publish forms, manage lists and groups | yes   |                                      |            |
+| Fill in published forms                          | yes   | yes                                  | yes        |
+| Dispatch forms                                   | yes   | yes (to users and groups)            |            |
+| View submissions                                 | all   | sites in scope, and their dispatches | their own  |
+
 ## Later phases (summary)
 
-- **Phase 2: form builder.** Versioned JSON form definitions (published versions are immutable,
-  and submissions record their version), a field-type registry, a safe expression engine (a
-  tokenizer and Pratt parser to an AST with a whitelisted function table; never `eval`), a generic
-  offline outbox with drafts, and dispatch to an inbox with an email notification.
 - **Phase 3: outputs and destinations.** PDF, DOCX, XLSX, JSON, XML and image renderers from
   branded templates; a `DestinationAdapter` interface with per-form destinations, rules, a
   delivery log, retries, a dead-letter queue and redelivery; a REST API with API keys.
@@ -251,5 +374,9 @@ This is a single-destination version of the Phase 3 destinations system.
 - Seed, legacy import and create-admin scripts live in `apps/api/src/scripts` so they ship in the
   API image.
 - Sync delay is measured on the device clock (see above).
+- Phase 2 does **not** re-express the attendance register as a form definition. The register
+  needs a per-site roster, replacements, shift-time maths, per-employee rows that managers correct
+  one by one, and its own report; as a generic form it would lose those or need special cases in
+  the form engine. Both share the outbox, sync engine, photo store and clock flags instead.
 
 See `TASKS.md` for the phased task list and status.

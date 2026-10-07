@@ -138,12 +138,17 @@ export const correctableFields = z.object({
 });
 export type CorrectableFields = z.infer<typeof correctableFields>;
 
-export const correctionInput = z.object({
-  changes: correctableFields
-    .partial()
-    .refine((c) => Object.keys(c).length > 0, 'Nothing to change'),
-  reason: z.string().trim().min(3, 'A reason is required').max(500),
-});
+export const correctionInput = z
+  .object({
+    changes: correctableFields.partial(),
+    /**
+     * Local "HH:mm" of the clock event. The server resolves it against the register's shift and
+     * work date (so a night-shift time after midnight lands on the next day). Overrides eventAt.
+     */
+    time: hhmm.optional(),
+    reason: z.string().trim().min(3, 'A reason is required').max(500),
+  })
+  .refine((c) => Object.keys(c.changes).length > 0 || c.time !== undefined, 'Nothing to change');
 export type CorrectionInput = z.infer<typeof correctionInput>;
 
 export const settingsSchema = z.object({

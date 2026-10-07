@@ -231,13 +231,27 @@ export async function deliverRegisterSummary(
   return 'sent';
 }
 
-/** Start and end registers from the app in the last week that have no delivery outcome yet. */
+/**
+ * Failed delivery attempts after which the sweeper stops re-enqueuing a register: three full
+ * pg-boss retry cycles (1 try + 8 retries each). The register then waits in the dead-letter queue.
+ */
+export const MAX_SWEEP_FAILURES = 27;
+
+/**
+ * Start and end registers from the app in the last week that still need an email: never attempted
+ * (the API failed to enqueue them), or failed more than an hour ago (the job's own retries are
+ * spent) and not yet given up on.
+ */
 export async function findUndelivered(db: Db): Promise<string[]> {
   const rows = await sql<{ id: string }>`
     SELECT r.id FROM register_submissions r
     WHERE r.kind IN ('start', 'end') AND r.source = 'app'
       AND r.server_received_at > now() - interval '7 days'
       AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.submission_id = r.id AND n.status IN ('sent', 'skipped'))
+      AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.submission_id = r.id AND n.status = 'failed'
+                      AND n.created_at > now() - interval '1 hour')
+      AND (SELECT count(*) FROM notification_log n WHERE n.submission_id = r.id AND n.status = 'failed')
+          < ${MAX_SWEEP_FAILURES}
     LIMIT 500
   `.execute(db);
   return rows.rows.map((r) => r.id);
@@ -258,4 +272,108 @@ export function gotenbergRenderer(baseUrl: string | undefined): PdfRenderer {
       return Buffer.from(await res.arrayBuffer());
     },
   };
+}
+
+// ------------------------------------------------------------ dispatched forms
+
+/**
+ * Tells the assignees of a dispatched form that it is waiting in their inbox. Sent once per
+ * dispatch; skipped (and recorded) when nobody has an email address or the task is no longer open.
+ */
+export async function deliverDispatchEmail(
+  db: Db,
+  mailer: Mailer,
+  dispatchId: string,
+  publicUrl: string,
+  recipients: (dispatchId: string) => Promise<string[]>,
+): Promise<'sent' | 'skipped' | 'already-sent'> {
+  const done = await db
+    .selectFrom('notification_log')
+    .select('status')
+    .where('dispatch_id', '=', dispatchId)
+    .where('status', 'in', ['sent', 'skipped'])
+    .executeTakeFirst();
+  if (done) return 'already-sent';
+
+  const d = await db
+    .selectFrom('dispatches as d')
+    .innerJoin('forms as f', 'f.id', 'd.form_id')
+    .leftJoin('sites as s', 's.id', 'd.site_id')
+    .leftJoin('users as u', 'u.id', 'd.created_by')
+    .select([
+      'd.title',
+      'd.instructions',
+      'd.due_on',
+      'd.status',
+      'f.name as form_name',
+      's.name as site_name',
+      'u.display_name as created_by',
+    ])
+    .where('d.id', '=', dispatchId)
+    .executeTakeFirst();
+  const skip = async (detail: string) => {
+    await db
+      .insertInto('notification_log')
+      .values({ submission_id: null, dispatch_id: dispatchId, status: 'skipped', detail })
+      .execute();
+    return 'skipped' as const;
+  };
+  if (!d) return 'skipped';
+  if (d.status !== 'open') return skip(`Task is ${d.status}`);
+  const to = await recipients(dispatchId);
+  if (!to.length) return skip('No assignee has an email address');
+
+  const link = `${publicUrl.replace(/\/$/, '')}/forms`;
+  const html = `<!doctype html><html><body style="font-family:Segoe UI,Arial,sans-serif;color:#1a202c">
+<div style="max-width:600px;margin:0 auto;border:1px solid #e2e8f0">
+  <div style="background:#1B365D;color:#fff;padding:16px 20px"><h2 style="margin:0">New task: ${esc(d.title)}</h2></div>
+  <div style="padding:16px 20px">
+    <p>${esc(d.created_by ?? 'A manager')} has sent you a form to fill in.</p>
+    <p><b>Form:</b> ${esc(d.form_name)}${d.site_name ? `<br><b>Site:</b> ${esc(d.site_name)}` : ''}${d.due_on ? `<br><b>Due:</b> ${esc(d.due_on)}` : ''}</p>
+    ${d.instructions ? `<p style="white-space:pre-wrap">${esc(d.instructions)}</p>` : ''}
+    <p><a href="${esc(link)}" style="background:#1B365D;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Open FieldForms</a></p>
+  </div>
+</div></body></html>`;
+  try {
+    await mailer.send({ to, subject: `New task: ${d.title}`, html, attachments: [] });
+  } catch (err) {
+    await db
+      .insertInto('notification_log')
+      .values({
+        submission_id: null,
+        dispatch_id: dispatchId,
+        status: 'failed',
+        recipients: to,
+        detail: (err as Error).message.slice(0, 500),
+      })
+      .execute();
+    throw err;
+  }
+  await db
+    .insertInto('notification_log')
+    .values({
+      submission_id: null,
+      dispatch_id: dispatchId,
+      status: 'sent',
+      recipients: to,
+      detail: null,
+    })
+    .onConflict((oc) => oc.doNothing())
+    .execute();
+  return 'sent';
+}
+
+/** Open dispatches from the last week with no email outcome yet, under the same retry cap. */
+export async function findUnnotifiedDispatches(db: Db): Promise<string[]> {
+  const rows = await sql<{ id: string }>`
+    SELECT d.id FROM dispatches d
+    WHERE d.status = 'open' AND d.created_at > now() - interval '7 days'
+      AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.dispatch_id = d.id AND n.status IN ('sent', 'skipped'))
+      AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.dispatch_id = d.id AND n.status = 'failed'
+                      AND n.created_at > now() - interval '1 hour')
+      AND (SELECT count(*) FROM notification_log n WHERE n.dispatch_id = d.id AND n.status = 'failed')
+          < ${MAX_SWEEP_FAILURES}
+    LIMIT 500
+  `.execute(db);
+  return rows.rows.map((r) => r.id);
 }

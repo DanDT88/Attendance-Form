@@ -1,10 +1,25 @@
 import Dexie, { type Table } from 'dexie';
-import type { OutboxItem, OutboxStore, StoredBlob } from '@fieldforms/shared';
+import type { OutboxItem, OutboxStore, StoredBlob } from '@fieldforms/shared/sync';
 
 export interface BlobRow {
   id: string;
   data: Blob;
   contentType: string;
+}
+
+/** A form being filled in on this phone, saved as the user types. */
+export interface DraftRow {
+  /** Becomes the submission id, so a draft submitted twice is still one submission. */
+  id: string;
+  ownerId: string;
+  formId: string;
+  versionId: string;
+  dispatchId: string | null;
+  siteId: string | null;
+  title: string;
+  answers: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface CacheRow {
@@ -21,6 +36,7 @@ export class FieldFormsDb extends Dexie {
   outbox!: Table<OutboxItem, string>;
   blobs!: Table<BlobRow, string>;
   cache!: Table<CacheRow, string>;
+  drafts!: Table<DraftRow, string>;
 
   constructor(name = 'fieldforms') {
     super(name);
@@ -29,6 +45,8 @@ export class FieldFormsDb extends Dexie {
       blobs: 'id',
       cache: 'key',
     });
+    // Phase 2: form drafts. Existing outboxes, photos and caches carry over untouched.
+    this.version(2).stores({ drafts: 'id, ownerId, updatedAt' });
   }
 }
 
@@ -82,18 +100,63 @@ export async function enqueue(
 ): Promise<void> {
   await db.transaction('rw', db.outbox, db.blobs, async () => {
     for (const p of photos) await db.blobs.put(p);
-    await db.outbox.add({
-      ...item,
-      blobIds: photos.map((p) => p.id),
-      status: 'pending',
-      attempts: 0,
-      nextAttemptAt: 0,
-      leaseUntil: 0,
-      lastError: null,
-      createdAt: Date.now(),
-      syncedAt: null,
-    });
+    await db.outbox.add(
+      newOutboxItem(
+        item,
+        photos.map((p) => p.id),
+      ),
+    );
   });
+}
+
+function newOutboxItem(
+  item: Pick<OutboxItem, 'id' | 'type' | 'payload' | 'label' | 'ownerId'>,
+  blobIds: string[],
+): OutboxItem {
+  return {
+    ...item,
+    blobIds,
+    status: 'pending',
+    attempts: 0,
+    nextAttemptAt: 0,
+    leaseUntil: 0,
+    lastError: null,
+    createdAt: Date.now(),
+    syncedAt: null,
+  };
+}
+
+/**
+ * Turns a finished draft into an outbox item in one transaction: the draft disappears exactly
+ * when its submission is safely queued. Its photos are already stored on the phone.
+ */
+export async function submitDraft(
+  draftId: string,
+  item: Pick<OutboxItem, 'type' | 'payload' | 'label' | 'ownerId'>,
+  blobIds: string[],
+  db: FieldFormsDb = localDb,
+): Promise<void> {
+  await db.transaction('rw', db.outbox, db.drafts, async () => {
+    if (!(await db.drafts.get(draftId))) throw new Error('This draft has already been submitted');
+    await db.outbox.add(newOutboxItem({ ...item, id: draftId }, blobIds));
+    await db.drafts.delete(draftId);
+  });
+}
+
+/** Deletes a draft and the photos and signatures only it was using. */
+export async function discardDraft(
+  draftId: string,
+  blobIds: string[],
+  db: FieldFormsDb = localDb,
+): Promise<void> {
+  await db.transaction('rw', db.drafts, db.blobs, async () => {
+    await db.drafts.delete(draftId);
+    await db.blobs.bulkDelete(blobIds);
+  });
+}
+
+export async function putBlob(row: BlobRow, db: FieldFormsDb = localDb): Promise<void> {
+  await db.blobs.put(row);
 }
 
 /** Lets items parked by a sign-out, or rejected ones the user chose to retry, go again. */
