@@ -10,41 +10,41 @@ working until cutover. All new code lives under `fieldforms/`.
 
 ## Decisions taken with the product owner
 
-| Question | Decision |
-|---|---|
+| Question                           | Decision                                                                                                                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Who records attendance in Phase 1? | **Supervisor register only.** A supervisor records attendance for the employees on a site roster, as the legacy app does. Staff do not log in. Self clock-in can be added later on the same data model. |
-| Sign-in | **Supervisors:** employee number + PIN. **Managers and Admins:** SSO (Microsoft 365 or Google via generic OIDC), with email + password as a fallback. |
-| Organisation model | **Company → Region → Site**, plus shifts per site. Managers and supervisors are scoped to companies, regions or sites. |
-| Legacy history | **Imported** from an XLSX export of the Google Sheet, tagged `source='legacy'`. The two systems run in parallel until cutover. |
-| Code location | `fieldforms/` in this repo (a pnpm monorepo). |
+| Sign-in                            | **Supervisors:** employee number + PIN. **Managers and Admins:** SSO (Microsoft 365 or Google via generic OIDC), with email + password as a fallback.                                                   |
+| Organisation model                 | **Company → Region → Site**, plus shifts per site. Managers and supervisors are scoped to companies, regions or sites.                                                                                  |
+| Legacy history                     | **Imported** from an XLSX export of the Google Sheet, tagged `source='legacy'`. The two systems run in parallel until cutover.                                                                          |
+| Code location                      | `fieldforms/` in this repo (a pnpm monorepo).                                                                                                                                                           |
 
 ## Stack
 
 TypeScript throughout, Node 22, pnpm workspaces.
 
-| Part | Choice | Why |
-|---|---|---|
-| `apps/web` | React + Vite, `vite-plugin-pwa` (Workbox, injectManifest), Dexie (IndexedDB), TanStack Query, React Router | Installable PWA for Android and iOS; Dexie gives a testable offline outbox |
-| `apps/api` | Fastify + zod + Kysely (typed SQL) over `pg` | Schema-first validation; plain SQL migrations stay readable |
-| `apps/worker` | pg-boss (a job queue stored in Postgres) | No Redis to run; retries, backoff, cron and dead-letter built in |
-| `packages/shared` | zod schemas, time and compliance helpers, the sync engine | One source of truth for client and server |
-| Database | PostgreSQL 16 | `timestamptz` everywhere, stored in UTC; shown in `Africa/Johannesburg` |
-| Files | S3-compatible storage (MinIO in compose) or local disk, behind one `BlobStore` interface | Images live outside the database |
-| Email | SMTP via nodemailer; Mailpit in development | |
-| PDF | Gotenberg (headless Chromium in a container) | Reused by the Phase 3 renderers |
-| Tests | Vitest for unit tests and API integration tests against a real Postgres; Playwright (Chromium) for end-to-end offline tests | |
-| Deploy | `docker compose up`: postgres, minio, mailpit, gotenberg, api, worker, web (nginx serving the PWA and proxying `/api`) | |
+| Part              | Choice                                                                                                                                       | Why                                                                                                                             |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`        | React + Vite, `vite-plugin-pwa` (Workbox, injectManifest), Dexie (IndexedDB), TanStack Query, React Router                                   | Installable PWA for Android and iOS; Dexie gives a testable offline outbox                                                      |
+| `apps/api`        | Fastify + zod + Kysely (typed SQL) over `pg`                                                                                                 | Schema-first validation; plain SQL migrations stay readable                                                                     |
+| Worker            | pg-boss (a job queue stored in Postgres), as a second entry point of `apps/api` (`src/worker.ts`)                                            | No Redis to run; retries, backoff, cron and dead-letter built in; shares the API's DB and storage code                          |
+| `packages/shared` | zod schemas, time and compliance helpers, the sync engine                                                                                    | One source of truth for client and server                                                                                       |
+| Database          | PostgreSQL 16                                                                                                                                | `timestamptz` everywhere, stored in UTC; shown in `Africa/Johannesburg`                                                         |
+| Files             | A Docker volume (default) or any S3-compatible store, behind one `BlobStore` interface                                                       | Images live outside the database. MinIO was planned, but its community images are no longer published, so compose uses a volume |
+| Email             | SMTP via nodemailer; Mailpit in development                                                                                                  |                                                                                                                                 |
+| PDF               | Gotenberg (headless Chromium in a container)                                                                                                 | Reused by the Phase 3 renderers                                                                                                 |
+| Tests             | Vitest for unit tests and API integration tests against a real Postgres; Playwright (Chromium) for end-to-end offline tests                  |                                                                                                                                 |
+| Deploy            | `docker compose up`: postgres, migrate and seed (one-shot), api, worker, gotenberg, mailpit, web (nginx serving the PWA and proxying `/api`) |                                                                                                                                 |
 
 ## Repository layout
 
 ```
 fieldforms/
-  apps/api/          Fastify API. src/{routes,services,auth,db}, migrations/*.sql, test/
-  apps/worker/       pg-boss worker: email summaries, sweeper
-  apps/web/          React PWA. src/{pages,offline,components}, e2e/ (Playwright)
+  apps/api/          Fastify API (src/server.ts) and worker (src/worker.ts); src/{routes,services,auth,db};
+                     src/scripts/{seed,import-legacy,create-admin}.ts; migrations/*.sql; test/
+  apps/web/          React PWA. src/{pages,offline,components,lib}, src/sw.ts, e2e/ (Playwright)
   packages/shared/   schemas, time + compliance maths, sync engine (+ unit tests)
-  scripts/           seed.ts, import-legacy.ts
-  docker/            Dockerfiles, nginx.conf
+  scripts/           make-icons.mjs
+  docker/            Dockerfiles, nginx.conf, security headers
   docker-compose.yml .env.example README.md CLAUDE.md ARCHITECTURE.md TASKS.md
 ```
 
@@ -113,8 +113,9 @@ upload attempt), and the server derives:
 - **Clock skew** = `server_received_at − device_sent_at`. Flagged when its absolute value
   exceeds `clock_skew_threshold_seconds` (default 120). This catches phones whose clock is wrong
   or has been changed.
-- **Sync delay** = `server_received_at − device_captured_at`. Stored and shown; flagged only
-  above `sync_delay_flag_hours` (default 24).
+- **Sync delay** = `device_sent_at − device_captured_at`, both on the device's own clock so a wrong
+  clock is not counted twice. Stored and shown; flagged only above `sync_delay_flag_hours`
+  (default 24).
 
 Both thresholds are admin settings.
 
@@ -131,13 +132,20 @@ Both thresholds are admin settings.
    2. `POST /api/registers` with the client UUID. The server inserts with
       `ON CONFLICT (id) DO NOTHING` and returns the stored record in either case.
    3. The item is marked `synced`.
-4. Retries use exponential backoff with full jitter (2 s doubling, capped at 15 min). Sync runs
-   on `online` events, on app open and visibility change, on a timer, and through Background
-   Sync on Android (iOS has none, so it syncs next time the app is open).
+4. Retries use exponential backoff with equal jitter (2 s doubling, capped at 15 min) for server
+   trouble. No attempt is made while the phone reports no connection, and when connectivity
+   returns (or the user taps _Sync now_) pending items are retried at once rather than waiting out
+   the backoff. Sync runs on `online` events, on app open and visibility change, every 30 s, after
+   each new capture, and through Background Sync on Android (iOS has none, so it syncs next time
+   the app is open).
+   Items are claimed with a 30-second lease, so a tab and the service worker do not send the same
+   item together, and an upload cut off by closing the app is picked up again once the lease lapses.
 5. Errors are classed as retryable (network, 5xx, 429), auth (401: items stay queued and the app
    asks for the PIN again) or permanent (4xx validation: the item is parked as `failed` with the
    reason and can be retried manually). Nothing is ever dropped silently.
 6. A status chip shows Pending, Syncing, Synced or Failed counts.
+7. Each item records the user who captured it, and only that user's session sends it, so a
+   register captured on a shared phone is never uploaded under someone else's name.
 
 The session cookie has a 30-day sliding expiry, so a supervisor who signed in online can keep
 capturing registers offline.
@@ -148,18 +156,18 @@ All routes are under `/api`. Every route checks role and scope on the server. Mu
 must carry the `X-FieldForms: 1` header; browsers cannot add it cross-site without a CORS
 preflight, which the API never grants, so this blocks CSRF alongside `SameSite=Lax` cookies.
 
-| Route | Who |
-|---|---|
-| `POST /auth/pin`, `POST /auth/password`, `GET /auth/oidc/:provider/start`, `GET /auth/oidc/:provider/callback`, `POST /auth/logout`, `GET /me` | anyone / signed in |
-| `POST /consent` | signed in |
-| `GET /sync/bootstrap` (sites, shifts, roster, pool, settings for the user's scope) | supervisor+ |
-| `PUT /blobs/:id`, `GET /blobs/:id` | supervisor+ (scoped) |
-| `POST /registers`, `GET /registers`, `GET /registers/:id` | supervisor (own scope) / manager+ |
-| `POST /entries/:id/corrections`, `POST /registers/manual` | manager+ (scoped), reason required |
-| `GET /reports/daily`, `GET /reports/daily/export.xlsx`, `.csv` | manager+ (scoped) |
-| `/admin/*` CRUD for companies, regions, sites, shifts, employees, users, settings | admin |
-| `GET /admin/audit`, `GET /admin/retention`, `/privacy/*` | admin |
-| `GET /health` | anyone |
+| Route                                                                                                                                          | Who                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `POST /auth/pin`, `POST /auth/password`, `GET /auth/oidc/:provider/start`, `GET /auth/oidc/:provider/callback`, `POST /auth/logout`, `GET /me` | anyone / signed in                 |
+| `POST /consent`                                                                                                                                | signed in                          |
+| `GET /sync/bootstrap` (sites, shifts, roster, pool, settings for the user's scope)                                                             | supervisor+                        |
+| `PUT /blobs/:id`, `GET /blobs/:id`                                                                                                             | supervisor+ (scoped)               |
+| `POST /registers`, `GET /registers`, `GET /registers/:id`                                                                                      | supervisor (own scope) / manager+  |
+| `POST /entries/:id/corrections`, `POST /registers/manual`                                                                                      | manager+ (scoped), reason required |
+| `GET /reports/daily`, `GET /reports/daily/export.xlsx`, `.csv`                                                                                 | manager+ (scoped)                  |
+| `/admin/*` CRUD for companies, regions, sites, shifts, employees, users, settings                                                              | admin                              |
+| `GET /admin/audit`, `GET /admin/retention`, `/privacy/*`                                                                                       | admin                              |
+| `GET /health`                                                                                                                                  | anyone                             |
 
 Rate limits apply to all routes, with a stricter limit on `/auth/*`. Security headers come from
 `@fastify/helmet`.
@@ -212,7 +220,11 @@ This is a single-destination version of the Phase 3 destinations system.
 `scripts/import-legacy.ts` reads an XLSX export of the legacy Google Sheet:
 
 - `Employees`, `ReplacementPool`, `SiteLocations`, `CompanyEmails` → master data. Legacy rows have
-  no employee number, so the importer assigns `LEG-nnnn` and matches attendance by name.
+  no employee number, so the importer assigns `LEG-nnnn` and matches attendance by name, only
+  within the same site or that region's replacement pool (two people with the same name at
+  different sites stay separate).
+- Legacy shift times become history-only shifts, created deactivated so they do not appear in
+  supervisors' pickers.
 - `Attendance` (the 30 columns in `ATTENDANCE_HEADERS`, `Code.gs:204`) → rows grouped by
   `SubmissionID` into `register_submissions` and `attendance_entries` with `source='legacy'`.
 - Re-running is safe: submissions already imported are skipped.
@@ -229,5 +241,15 @@ This is a single-destination version of the Phase 3 destinations system.
   branded templates; a `DestinationAdapter` interface with per-form destinations, rules, a
   delivery log, retries, a dead-letter queue and redelivery; a REST API with API keys.
 - **Phase 4: dashboards.** A chart builder over form fields and a preset attendance dashboard.
+
+## Changes from the approved plan
+
+- The worker is a second entry point of `apps/api` rather than its own package, so it shares the
+  database, storage and rendering code without a third build.
+- Compose stores photos on a Docker volume instead of MinIO (no MinIO images are published any
+  more). The S3 driver is still there for production.
+- Seed, legacy import and create-admin scripts live in `apps/api/src/scripts` so they ship in the
+  API image.
+- Sync delay is measured on the device clock (see above).
 
 See `TASKS.md` for the phased task list and status.
