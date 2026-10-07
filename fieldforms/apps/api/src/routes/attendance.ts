@@ -17,6 +17,8 @@ import {
   listRegisters,
 } from '../services/registers.js';
 import { dailyReport, type ReportFilter } from '../services/report.js';
+import { myOpenDispatches } from '../services/form-submissions.js';
+import { listItems, listsUsed, publishedForms } from '../services/forms.js';
 import { getSettings } from '../services/settings.js';
 
 const reportQuery = z.object({
@@ -66,15 +68,12 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
       .orderBy('r.name')
       .orderBy('s.name');
     if (user.siteIds !== null) {
-      if (!user.siteIds.length)
-        return {
-          sites: [],
-          shifts: [],
-          employees: [],
-          pool: [],
-          generatedAt: new Date().toISOString(),
-        };
-      sitesQ = sitesQ.where('s.id', 'in', user.siteIds);
+      // A user with no sites still gets forms and their inbox; the site lists stay empty.
+      sitesQ = sitesQ.where(
+        's.id',
+        'in',
+        user.siteIds.length ? user.siteIds : ['00000000-0000-0000-0000-000000000000'],
+      );
     }
     const sites = await sitesQ.execute();
     const siteIds = sites.map((s) => s.id);
@@ -108,9 +107,20 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
           .execute()
       : [];
     const settings = await getSettings(db);
+    const forms = await publishedForms(db);
     return {
       generatedAt: new Date().toISOString(),
       settings: { shiftGraceMinutes: settings.shiftGraceMinutes },
+      // Phase 2: what this user can fill in offline, the option lists those forms use, and their inbox.
+      forms: forms.map((f) => ({
+        formId: f.form_id,
+        name: f.name,
+        versionId: f.version_id,
+        version: f.version,
+        definition: f.definition,
+      })),
+      lists: await listItems(db, listsUsed(forms.map((f) => f.definition))),
+      inbox: await myOpenDispatches(db, user.id),
       sites,
       shifts: shifts.map((s) => ({
         ...s,

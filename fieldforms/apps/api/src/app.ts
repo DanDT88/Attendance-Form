@@ -10,6 +10,7 @@ import { HttpError } from './lib/errors.js';
 import { adminRoutes } from './routes/admin.js';
 import { attendanceRoutes } from './routes/attendance.js';
 import { authRoutes } from './routes/auth.js';
+import { formRoutes } from './routes/forms.js';
 import type { JobQueue } from './services/registers.js';
 
 export interface AppDeps {
@@ -60,6 +61,7 @@ export async function buildApp(
       await authRoutes(api, deps);
       await attendanceRoutes(api, deps);
       await adminRoutes(api, deps);
+      await formRoutes(api, deps);
     },
     { prefix: '/api' },
   );

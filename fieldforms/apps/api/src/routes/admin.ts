@@ -462,6 +462,8 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
     const b = parse(
       z.object({
         displayName: z.string().trim().min(1).max(120).optional(),
+        /** Optional for supervisors (task emails); required for office users. */
+        email: z.string().email().max(200).nullable().optional(),
         active: z.boolean().optional(),
         pin: z.string().optional(),
         password: z.string().optional(),
@@ -477,6 +479,8 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
       .executeTakeFirst();
     if (!user) throw notFound();
     if (id === me.id && b.active === false) throw badRequest('You cannot deactivate yourself');
+    if (b.email === null && user.role !== 'supervisor')
+      throw badRequest('Managers and admins need an email');
     if (b.pin !== undefined) {
       if (user.role !== 'supervisor') throw badRequest('Only supervisors use a PIN');
       const e = validatePin(b.pin);
@@ -488,32 +492,36 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
       if (e) throw badRequest(e);
     }
     const resetLock = b.unlock || b.pin !== undefined || b.password !== undefined;
-    await db.transaction().execute(async (trx) => {
-      await trx
-        .updateTable('users')
-        .set({
-          ...(b.displayName && { display_name: b.displayName }),
-          ...(b.active !== undefined && { active: b.active }),
-          ...(b.pin !== undefined && { pin_hash: await hashSecret(b.pin) }),
-          ...(b.password !== undefined && { password_hash: await hashSecret(b.password) }),
-          ...(resetLock && { failed_attempts: 0, locked_until: null }),
-        })
-        .where('id', '=', id)
-        .execute();
-      if (b.scopes) await setScopes(trx, id, b.scopes);
-      // A deactivated user or a changed secret signs out everywhere.
-      if (b.active === false || b.pin !== undefined || b.password !== undefined)
-        await deleteUserSessions(trx, id);
-      await audit(trx, auditCtx(req), {
-        action: 'admin.user.update',
-        entity: 'user',
-        entityId: id,
-        details: {
-          fields: Object.keys(b).filter((k) => k !== 'pin' && k !== 'password'),
-          secretChanged: b.pin !== undefined || b.password !== undefined,
-        },
-      });
-    });
+    await unique(
+      db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('users')
+          .set({
+            ...(b.displayName && { display_name: b.displayName }),
+            ...(b.email !== undefined && { email: b.email?.toLowerCase() ?? null }),
+            ...(b.active !== undefined && { active: b.active }),
+            ...(b.pin !== undefined && { pin_hash: await hashSecret(b.pin) }),
+            ...(b.password !== undefined && { password_hash: await hashSecret(b.password) }),
+            ...(resetLock && { failed_attempts: 0, locked_until: null }),
+          })
+          .where('id', '=', id)
+          .execute();
+        if (b.scopes) await setScopes(trx, id, b.scopes);
+        // A deactivated user or a changed secret signs out everywhere.
+        if (b.active === false || b.pin !== undefined || b.password !== undefined)
+          await deleteUserSessions(trx, id);
+        await audit(trx, auditCtx(req), {
+          action: 'admin.user.update',
+          entity: 'user',
+          entityId: id,
+          details: {
+            fields: Object.keys(b).filter((k) => k !== 'pin' && k !== 'password'),
+            secretChanged: b.pin !== undefined || b.password !== undefined,
+          },
+        });
+      }),
+      'email',
+    );
     return { ok: true };
   });
 
