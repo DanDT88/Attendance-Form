@@ -454,3 +454,13 @@ describe('SFTP destination check', () => {
     expect(server.log.some((l) => l.startsWith('MKDIR') || l.startsWith('OPEN'))).toBe(false);
   });
 });
+
+describe('SFTP with nothing to send', () => {
+  it('skips without connecting when the formats produced no files', async () => {
+    const sessions = server.sessions;
+    const r = await attempt(fileContext({ files: [] }));
+    expect(r.outcome).toBe('skipped');
+    expect(r.detail).toBe('There were no documents to upload');
+    expect(server.sessions).toBe(sessions);
+  });
+});

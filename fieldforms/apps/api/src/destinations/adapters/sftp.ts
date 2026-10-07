@@ -255,6 +255,15 @@ export const sftpAdapter: DestinationAdapter<Settings, SftpConfig> = {
     // already at a final name is not this delivery's. Test files ("TEST " names) may be replaced.
     const firstUpload =
       !ctx.test && ctx.delivery.generation === 1 && target.fixedOnAttempt === ctx.delivery.attempt;
+    const where = { host: c.config.host, port: c.config.port ?? 22, folder: target.folder };
+    // e.g. the photos format of a submission without photos.
+    if (!ctx.files.length)
+      return {
+        outcome: 'skipped',
+        detail: 'There were no documents to upload',
+        target: { ...where, paths: [] },
+        evidence: {},
+      };
     const s = await connectSftp(c, env);
     try {
       const home = await loginFolder(s, env);
@@ -290,12 +299,7 @@ export const sftpAdapter: DestinationAdapter<Settings, SftpConfig> = {
       }
       return {
         outcome: 'delivered',
-        target: {
-          host: c.config.host,
-          port: c.config.port ?? 22,
-          folder: target.folder,
-          paths: target.paths,
-        },
+        target: { ...where, paths: target.paths },
         evidence: { paths: finals, sizes },
       };
     } finally {
