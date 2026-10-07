@@ -1,13 +1,14 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  // Flat output names: dist/server.js, dist/worker.js, dist/migrate.js, dist/seed.js, dist/import-legacy.js
+  // Flat output names: dist/server.js, dist/worker.js, dist/migrate.js, dist/seed.js, ...
   entry: {
     server: 'src/server.ts',
     worker: 'src/worker.ts',
     migrate: 'src/db/migrate-cli.ts',
     seed: 'src/scripts/seed.ts',
     'import-legacy': 'src/scripts/import-legacy.ts',
+    'create-admin': 'src/scripts/create-admin.ts',
   },
   format: 'esm',
   platform: 'node',

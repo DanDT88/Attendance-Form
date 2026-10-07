@@ -6,7 +6,11 @@ export const TEST_ADMIN_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://fieldforms:devpassword@localhost:5432/postgres';
 
 export const TEMPLATE_DB = 'ff_test_template';
-export const TEST_APP_PASSWORD = 'test-app-password';
+/**
+ * The fieldforms_app role is cluster-wide, so tests must set the same password the developer's
+ * running API uses on this Postgres, or a test run would lock that API out.
+ */
+export const TEST_APP_PASSWORD = process.env.APP_DB_PASSWORD ?? 'dev-app-password';
 
 export function adminUrl(): string {
   return TEST_ADMIN_URL;
