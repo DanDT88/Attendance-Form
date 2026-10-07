@@ -1,13 +1,21 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/server.ts', 'src/worker.ts', 'src/db/migrate-cli.ts', 'src/scripts/seed.ts', 'src/scripts/import-legacy.ts'],
+  // Flat output names: dist/server.js, dist/worker.js, dist/migrate.js, dist/seed.js, dist/import-legacy.js
+  entry: {
+    server: 'src/server.ts',
+    worker: 'src/worker.ts',
+    migrate: 'src/db/migrate-cli.ts',
+    seed: 'src/scripts/seed.ts',
+    'import-legacy': 'src/scripts/import-legacy.ts',
+  },
   format: 'esm',
   platform: 'node',
   target: 'node22',
   outDir: 'dist',
   clean: true,
   sourcemap: true,
-  // Bundle the workspace package; everything from npm stays external and is installed in the image.
-  noExternal: ['@fieldforms/shared'],
+  // Bundle the workspace package (and the date libraries only it uses); the rest of npm stays
+  // external and is installed in the image.
+  noExternal: ['@fieldforms/shared', 'date-fns', 'date-fns-tz'],
 });

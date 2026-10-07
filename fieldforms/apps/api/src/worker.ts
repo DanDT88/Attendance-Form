@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { loadConfig } from './config.js';
 import { createDb } from './db/index.js';
 import { createBlobStore } from './lib/blobstore.js';
-import { bossQueue, createBoss, REGISTER_NOTIFY } from './queue.js';
+import { bossQueue, createBoss, ensureQueue, REGISTER_NOTIFY } from './queue.js';
 import { deliverRegisterSummary, findUndelivered, gotenbergRenderer, type Mailer } from './services/notify.js';
 
 /**
@@ -49,7 +49,7 @@ await boss.work<{ submissionId: string }>(REGISTER_NOTIFY, async ([job]) => {
 });
 
 const SWEEP = 'register-notify-sweep';
-await boss.createQueue(SWEEP);
+await ensureQueue(boss, SWEEP);
 await boss.schedule(SWEEP, '*/10 * * * *');
 await boss.work(SWEEP, async () => {
   const ids = await findUndelivered(db);

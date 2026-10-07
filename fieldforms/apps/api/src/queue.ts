@@ -11,12 +11,30 @@ export const NOTIFY_JOB_OPTIONS = {
   deadLetter: `${REGISTER_NOTIFY}-dead`,
 } as const;
 
+/**
+ * Creates a queue unless it exists. The API and the worker both do this at start-up, and two
+ * concurrent createQueue calls can deadlock inside pg-boss, so a deadlock or duplicate is retried.
+ */
+export async function ensureQueue(boss: PgBoss, name: string, options: Omit<PgBoss.Queue, 'name'> = {}): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    if (await boss.getQueue(name)) return;
+    try {
+      await boss.createQueue(name, { name, ...options });
+      return;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (attempt >= 5 || (code !== '40P01' && code !== '23505')) throw err;
+      await new Promise((r) => setTimeout(r, 100 * attempt + Math.random() * 200));
+    }
+  }
+}
+
 export async function createBoss(connectionString: string): Promise<PgBoss> {
   const boss = new PgBoss({ connectionString, schema: 'pgboss' });
   boss.on('error', (err) => console.error('[pg-boss]', err));
   await boss.start();
-  await boss.createQueue(`${REGISTER_NOTIFY}-dead`);
-  await boss.createQueue(REGISTER_NOTIFY, { name: REGISTER_NOTIFY, ...NOTIFY_JOB_OPTIONS });
+  await ensureQueue(boss, `${REGISTER_NOTIFY}-dead`);
+  await ensureQueue(boss, REGISTER_NOTIFY, NOTIFY_JOB_OPTIONS);
   return boss;
 }
 

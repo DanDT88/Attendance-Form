@@ -36,5 +36,9 @@
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.15.5",
     "tsup": "^8.5.0"
-  }
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ]
 }
