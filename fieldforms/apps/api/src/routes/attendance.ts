@@ -120,7 +120,7 @@ export async function attendanceRoutes(app: FastifyInstance, deps: AppDeps): Pro
         definition: f.definition,
       })),
       lists: await listItems(db, listsUsed(forms.map((f) => f.definition))),
-      inbox: await myOpenDispatches(db, user.id),
+      inbox: await myOpenDispatches(db, user),
       sites,
       shifts: shifts.map((s) => ({
         ...s,

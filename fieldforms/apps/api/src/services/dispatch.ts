@@ -1,7 +1,7 @@
 import { evaluateForm, isoDate, uuid, type Answers, type FormDefinition } from '@fieldforms/shared';
 import { z } from 'zod';
 import type { AuthUser } from '../auth/scope.js';
-import { assertSite } from '../auth/scope.js';
+import { assertSite, resolveSiteIds } from '../auth/scope.js';
 import type { Db } from '../db/index.js';
 import { badRequest, forbidden, HttpError, notFound } from '../lib/errors.js';
 import { parse } from '../lib/validate.js';
@@ -53,13 +53,17 @@ export async function createDispatch(
   if (form.definition.settings.siteRequired && !input.siteId)
     throw badRequest('Choose the site for this task');
 
+  // A task for a site is only any use to people who may submit for that site.
+  const siteId = input.siteId ?? null;
   if (input.assignedUserId) {
     const u = await db
       .selectFrom('users')
-      .select(['id', 'active'])
+      .select(['id', 'active', 'role', 'display_name'])
       .where('id', '=', input.assignedUserId)
       .executeTakeFirst();
     if (!u || !u.active) throw badRequest('Unknown or deactivated user');
+    if (!(await withSiteAccess(db, siteId, [u])).length)
+      throw badRequest(`${u.display_name} has no access to that site`);
   } else {
     const g = await db
       .selectFrom('user_groups')
@@ -67,6 +71,15 @@ export async function createDispatch(
       .where('id', '=', input.assignedGroupId!)
       .executeTakeFirst();
     if (!g || g.archived_at) throw badRequest('Unknown or archived group');
+    const members = await db
+      .selectFrom('user_group_members as m')
+      .innerJoin('users as u', 'u.id', 'm.user_id')
+      .select(['u.id', 'u.role'])
+      .where('m.group_id', '=', g.id)
+      .where('u.active', '=', true)
+      .execute();
+    if (!(await withSiteAccess(db, siteId, members)).length)
+      throw badRequest('Nobody in that group has access to that site');
   }
 
   // Pre-filled answers must fit the form; whether it is complete is for the assignee.
@@ -189,25 +202,48 @@ export async function cancelDispatch(db: Db, user: AuthUser, id: string, ctx: Au
   await audit(db, ctx, { action: 'dispatch.cancel', entity: 'dispatch', entityId: id });
 }
 
-/** Who should hear about a dispatch: the user, or every active member of the group, with an email. */
+/** Keeps the users whose scope covers the site; everyone when the task is not about a site. */
+async function withSiteAccess<T extends { id: string; role: AuthUser['role'] }>(
+  db: Db,
+  siteId: string | null,
+  users: T[],
+): Promise<T[]> {
+  if (!siteId) return users;
+  const out: T[] = [];
+  for (const u of users) {
+    const sites = await resolveSiteIds(db, u.id, u.role);
+    if (sites === null || sites.includes(siteId)) out.push(u);
+  }
+  return out;
+}
+
+/**
+ * Who should hear about a dispatch: the user, or the active members of the group who can see its
+ * site, with an email address.
+ */
 export async function dispatchRecipients(db: Db, dispatchId: string): Promise<string[]> {
   const d = await db
     .selectFrom('dispatches')
-    .select(['assigned_user_id', 'assigned_group_id'])
+    .select(['assigned_user_id', 'assigned_group_id', 'site_id'])
     .where('id', '=', dispatchId)
     .executeTakeFirst();
   if (!d) return [];
   const users = d.assigned_user_id
     ? await db
         .selectFrom('users')
-        .select(['email', 'active'])
+        .select(['id', 'role', 'email', 'active'])
         .where('id', '=', d.assigned_user_id)
         .execute()
     : await db
         .selectFrom('user_group_members as m')
         .innerJoin('users as u', 'u.id', 'm.user_id')
-        .select(['u.email', 'u.active'])
+        .select(['u.id', 'u.role', 'u.email', 'u.active'])
         .where('m.group_id', '=', d.assigned_group_id!)
         .execute();
-  return users.filter((u) => u.active && u.email).map((u) => u.email!);
+  const reachable = await withSiteAccess(
+    db,
+    d.site_id,
+    users.filter((u) => u.active && u.email),
+  );
+  return reachable.map((u) => u.email!);
 }

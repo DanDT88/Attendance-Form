@@ -435,6 +435,51 @@ describe('dispatch', () => {
     expect((await req('GET', '/api/inbox', sup)).json()).toEqual([]);
     expect((await req('POST', `/api/dispatches/${d.id}/cancel`, mgr)).statusCode).toBe(400);
   });
+
+  it('only reaches people who can submit for the task’s site', async () => {
+    const mixed = (
+      await req('POST', '/api/admin/groups', admin, {
+        name: 'Both sites',
+        memberIds: [t.fx.users.supervisor, t.fx.users.supervisorB],
+      })
+    ).json();
+    const d = await req('POST', '/api/dispatches', admin, {
+      formId,
+      title: 'Site A only',
+      siteId: t.fx.siteA,
+      assignedGroupId: mixed.id,
+    });
+    expect(d.statusCode, d.body).toBe(201);
+    const ids = (cookie: string) =>
+      req('GET', '/api/inbox', cookie).then((r) => r.json().map((x: { id: string }) => x.id));
+    expect(await ids(sup)).toContain(d.json().id);
+    expect(await ids(supB)).toEqual([]);
+    expect((await req('GET', '/api/sync/bootstrap', supB)).json().inbox).toEqual([]);
+
+    const siteBTeam = (
+      await req('POST', '/api/admin/groups', admin, {
+        name: 'Site B team',
+        memberIds: [t.fx.users.supervisorB],
+      })
+    ).json();
+    const nobody = await req('POST', '/api/dispatches', admin, {
+      formId,
+      title: 'x',
+      siteId: t.fx.siteA,
+      assignedGroupId: siteBTeam.id,
+    });
+    expect(nobody.statusCode).toBe(400);
+    expect(nobody.json().error).toMatch(/Nobody in that group/);
+    const wrongUser = await req('POST', '/api/dispatches', admin, {
+      formId,
+      title: 'x',
+      siteId: t.fx.siteA,
+      assignedUserId: t.fx.users.supervisorB,
+    });
+    expect(wrongUser.statusCode).toBe(400);
+    expect(wrongUser.json().error).toMatch(/no access to that site/);
+    await req('POST', `/api/dispatches/${d.json().id}/cancel`, admin);
+  });
 });
 
 describe('dispatch emails', () => {
@@ -531,5 +576,35 @@ describe('dispatch emails', () => {
     ).toBe('skipped');
     expect(m.sent).toHaveLength(0);
     expect(await findUnnotifiedDispatches(t.db)).not.toContain(d1.id);
+  });
+
+  it('emails only the group members who can see the task’s site', async () => {
+    await req('PATCH', `/api/admin/users/${t.fx.users.supervisorB}`, admin, {
+      email: 'b@site-b.test',
+    });
+    const g = (
+      await req('POST', '/api/admin/groups', admin, {
+        name: 'Mixed mail',
+        memberIds: [t.fx.users.supervisor, t.fx.users.supervisorB],
+      })
+    ).json();
+    const forA = (
+      await req('POST', '/api/dispatches', admin, {
+        formId,
+        title: 'A only',
+        siteId: t.fx.siteA,
+        assignedGroupId: g.id,
+      })
+    ).json();
+    const forB = (
+      await req('POST', '/api/dispatches', admin, {
+        formId,
+        title: 'B only',
+        siteId: t.fx.siteB,
+        assignedGroupId: g.id,
+      })
+    ).json();
+    expect(await recipientsOf(forA.id)).toEqual(['sam@site-a.test']);
+    expect(await recipientsOf(forB.id)).toEqual(['b@site-b.test']);
   });
 });

@@ -200,7 +200,7 @@ export async function formRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
   });
   app.get('/inbox', async (req) => {
     const user = requireUser(req);
-    return myOpenDispatches(db, user.id);
+    return myOpenDispatches(db, user);
   });
   /** People a manager can dispatch to: active users and groups, names only. */
   app.get('/dispatch-targets', async (req) => {

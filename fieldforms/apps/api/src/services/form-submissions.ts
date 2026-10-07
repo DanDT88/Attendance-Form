@@ -27,9 +27,12 @@ export const formSubmissionInput = z.object({
   deviceSentAt: isoInstant,
 });
 
-/** Dispatch ids open to this user: assigned to them, or to a group they are in. */
-export async function myOpenDispatches(db: Db, userId: string) {
-  return db
+/**
+ * Open tasks for this user: assigned to them, or to a group they are in, and about a site they can
+ * submit for (a group may span sites its members cannot all see).
+ */
+export async function myOpenDispatches(db: Db, user: AuthUser) {
+  let q = db
     .selectFrom('dispatches as d')
     .innerJoin('forms as f', 'f.id', 'd.form_id')
     .innerJoin('form_versions as v', 'v.id', 'd.form_version_id')
@@ -57,17 +60,21 @@ export async function myOpenDispatches(db: Db, userId: string) {
     .where('d.status', '=', 'open')
     .where((eb) =>
       eb.or([
-        eb('d.assigned_user_id', '=', userId),
+        eb('d.assigned_user_id', '=', user.id),
         eb(
           'd.assigned_group_id',
           'in',
-          eb.selectFrom('user_group_members').select('group_id').where('user_id', '=', userId),
+          eb.selectFrom('user_group_members').select('group_id').where('user_id', '=', user.id),
         ),
       ]),
-    )
-    .orderBy('d.due_on', 'asc')
-    .orderBy('d.created_at', 'asc')
-    .execute();
+    );
+  if (user.siteIds !== null) {
+    const sites = user.siteIds;
+    q = q.where((eb) =>
+      eb.or([eb('d.site_id', 'is', null), ...(sites.length ? [eb('d.site_id', 'in', sites)] : [])]),
+    );
+  }
+  return q.orderBy('d.due_on', 'asc').orderBy('d.created_at', 'asc').execute();
 }
 
 export async function canFillDispatch(
