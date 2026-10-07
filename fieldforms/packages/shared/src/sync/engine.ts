@@ -32,6 +32,11 @@ export interface OutboxItem {
   syncedAt: number | null;
   /** Short human summary for the outbox screen, e.g. "Start register · Site A · 12 staff". */
   label: string;
+  /**
+   * The user who captured it. Only that user's session may send it, so a register captured by one
+   * supervisor is never uploaded under another's name on a shared phone.
+   */
+  ownerId?: string;
 }
 
 export interface StoredBlob {
