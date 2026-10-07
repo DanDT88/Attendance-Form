@@ -74,9 +74,28 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
         name: z.string().trim().min(1).max(120).optional(),
         reportRecipients: emails.optional(),
         active: active.optional(),
+        // Branding for this company's documents (null falls back to the settings defaults).
+        brandColour: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/, 'A colour like #1B365D')
+          .nullable()
+          .optional(),
+        /** A PNG or JPEG uploaded first with PUT /api/blobs/:id. */
+        logoBlobId: uuid.nullable().optional(),
+        documentFooter: z.string().trim().max(500).nullable().optional(),
       }),
       req.body,
     );
+    if (b.logoBlobId) {
+      const logo = await db
+        .selectFrom('blobs')
+        .select('content_type')
+        .where('id', '=', b.logoBlobId)
+        .executeTakeFirst();
+      if (!logo) throw badRequest('Upload the logo first');
+      if (logo.content_type !== 'image/png' && logo.content_type !== 'image/jpeg')
+        throw badRequest('The logo must be a PNG or JPEG image');
+    }
     const row = await unique(
       db
         .updateTable('companies')
@@ -84,6 +103,9 @@ export async function adminRoutes(app: FastifyInstance, deps: AppDeps): Promise<
           ...(b.name && { name: b.name }),
           ...(b.reportRecipients && { report_recipients: b.reportRecipients }),
           ...deactivation(b.active),
+          ...(b.brandColour !== undefined && { brand_colour: b.brandColour }),
+          ...(b.logoBlobId !== undefined && { logo_blob_id: b.logoBlobId }),
+          ...(b.documentFooter !== undefined && { document_footer: b.documentFooter || null }),
         })
         .where('id', '=', id)
         .returningAll()
