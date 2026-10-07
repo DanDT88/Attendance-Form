@@ -1,4 +1,11 @@
-import { addDays, localDate, DEFAULT_SETTINGS, SITE_INSPECTION } from '@fieldforms/shared';
+import {
+  addDays,
+  DEFAULT_SETTINGS,
+  destinationInclude,
+  destinationSettingsSchemas,
+  localDate,
+  SITE_INSPECTION,
+} from '@fieldforms/shared';
 import { randomUUID } from 'node:crypto';
 import { hashSecret } from '../auth/passwords.js';
 import { resolveSiteIds } from '../auth/scope.js';
@@ -377,6 +384,45 @@ async function main(db: Db) {
         .filter((x) => x.regionId === gauteng)
         .map((x) => ({ group_id: team.id, user_id: x.supervisor })),
     )
+    .execute();
+
+  // ------------------------------------------------------------ Phase 3 demo: an email destination
+  // Every inspection goes as a PDF to its site's report recipients (Mailpit in development).
+  const emailSettings = destinationSettingsSchemas.email.parse({
+    recipients: { siteRecipients: true },
+  });
+  const include = destinationInclude.parse({});
+  const destination = await db
+    .insertInto('destinations')
+    .values({
+      form_id: form.id,
+      name: 'Site report recipients',
+      kind: 'email',
+      formats: ['pdf'],
+      templates: '{}',
+      settings: JSON.stringify(emailSettings),
+      include: JSON.stringify(include),
+      recipient: 'Our own staff (site report recipients)',
+      cross_border: false,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('destination_revisions')
+    .values({
+      destination_id: destination.id,
+      revision: 1,
+      name: 'Site report recipients',
+      connection_id: null,
+      formats: ['pdf'],
+      templates: '{}',
+      condition: null,
+      settings: JSON.stringify(emailSettings),
+      include: JSON.stringify(include),
+      recipient: 'Our own staff (site report recipients)',
+      cross_border: false,
+      active: true,
+    })
     .execute();
 
   // ------------------------------------------------------------ a week of history

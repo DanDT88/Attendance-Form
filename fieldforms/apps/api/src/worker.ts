@@ -91,7 +91,10 @@ const destinationMailer: DestinationMailer = {
 const { db } = createDb(cfg.DATABASE_URL);
 const blobs = createBlobStore(cfg);
 await blobs.ensureReady();
-const pdf = gotenbergRenderer(cfg.GOTENBERG_URL);
+const pdf = gotenbergRenderer(cfg.GOTENBERG_URL, {
+  username: cfg.GOTENBERG_USERNAME,
+  password: cfg.GOTENBERG_PASSWORD,
+});
 const boss = await createBoss(cfg.DATABASE_URL);
 const queue = bossQueue(boss);
 

@@ -280,15 +280,23 @@ export async function findUndelivered(
   return rows.rows.map((r) => r.id);
 }
 
-export function gotenbergRenderer(baseUrl: string | undefined): PdfRenderer {
+export function gotenbergRenderer(
+  baseUrl: string | undefined,
+  auth?: { username?: string; password?: string },
+): PdfRenderer {
   return {
     async htmlToPdf(html) {
       if (!baseUrl) return null;
       const form = new FormData();
       form.append('files', new Blob([html], { type: 'text/html' }), 'index.html');
+      const headers: Record<string, string> = {};
+      // Gotenberg runs behind basic auth (docker-compose.yml).
+      if (auth?.username)
+        headers.authorization = `Basic ${Buffer.from(`${auth.username}:${auth.password ?? ''}`).toString('base64')}`;
       const res = await fetch(`${baseUrl.replace(/\/$/, '')}/forms/chromium/convert/html`, {
         method: 'POST',
         body: form,
+        headers,
         signal: AbortSignal.timeout(30_000),
       });
       if (!res.ok) throw new Error(`Gotenberg ${res.status}`);
