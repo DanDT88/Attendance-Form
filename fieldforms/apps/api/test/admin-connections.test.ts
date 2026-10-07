@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestContext, H, login, type TestContext } from './helpers.js';
 
@@ -350,6 +350,79 @@ describe('connections', () => {
     const list = (await req('GET', '/api/admin/connections?kind=sftp', admin)).json();
     expect(list.every((c: { kind: string }) => c.kind === 'sftp')).toBe(true);
     expect(list.at(-1).id).toBe(sftpId);
+  });
+
+  it('handles the cloud kinds: their binding fields reset the secrets, others do not', async () => {
+    const make = async (body: object) => {
+      const r = await req('POST', '/api/admin/connections', admin, body);
+      expect(r.statusCode, r.body).toBe(201);
+      return r.json().id as string;
+    };
+    const patch = (id: string, body: object) =>
+      req('PATCH', `/api/admin/connections/${id}`, admin, body);
+
+    const s3 = await make({
+      name: 'Archive bucket',
+      kind: 's3',
+      config: { region: 'af-south-1' },
+      secrets: { accessKeyId: 'AKIAEXAMPLE', secretAccessKey: S3_SECRET },
+    });
+    expect((await row(s3)).config).toEqual({ region: 'af-south-1', forcePathStyle: false });
+    // Path style is not where the secrets go; the endpoint is.
+    expect(
+      (await patch(s3, { config: { region: 'af-south-1', forcePathStyle: true } })).json(),
+    ).toEqual({ secretsReset: false });
+    expect((await row(s3)).secret_keys).toEqual(['accessKeyId', 'secretAccessKey']);
+    expect(
+      (
+        await patch(s3, {
+          config: { region: 'af-south-1', endpoint: 'https://minio.example.com' },
+        })
+      ).json(),
+    ).toEqual({ secretsReset: true });
+    expect((await row(s3)).secret_keys).toEqual([]);
+    const partial = await patch(s3, { secrets: { accessKeyId: 'AKIAONLY' } });
+    expect(partial.statusCode).toBe(400);
+    expect(partial.json().error).toContain('secrets.secretAccessKey');
+
+    const ms = await make({
+      name: 'Tenant app',
+      kind: 'microsoft',
+      config: { tenantId: 'acme.onmicrosoft.com', clientId: randomUUID() },
+      secrets: { clientSecret: 'ms-client-secret-3a7f' },
+    });
+    const moved = await patch(ms, {
+      config: { tenantId: 'other.onmicrosoft.com', clientId: randomUUID() },
+    });
+    expect(moved.json()).toEqual({ secretsReset: true });
+
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const keyFile = JSON.stringify({
+      type: 'service_account',
+      client_email: 'ff@acme-project.iam.gserviceaccount.com',
+      private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    });
+    const google = await make({
+      name: 'Workspace',
+      kind: 'google',
+      config: { subject: 'Ops@Acme.test' },
+      secrets: { serviceAccountJson: keyFile },
+    });
+    const g = await row(google);
+    expect(g.config).toEqual({ subject: 'ops@acme.test' });
+    expect(t.opener.open(g.secrets!, `connection:${google}`)).toEqual({
+      serviceAccountJson: keyFile,
+    });
+    const notKey = await req('POST', '/api/admin/connections', admin, {
+      name: 'Not a key',
+      kind: 'google',
+      secrets: { serviceAccountJson: '{"type":"user","secret":"do-not-echo-0b9c"}' },
+    });
+    expect(notKey.statusCode).toBe(400);
+    expect(notKey.body).not.toContain('do-not-echo-0b9c');
+
+    const all = (await req('GET', '/api/admin/connections', admin)).body;
+    expectNoSecrets(all, ['ms-client-secret-3a7f', 'PRIVATE KEY']);
   });
 
   it('queues a check of a saved connection and reports its result', async () => {
