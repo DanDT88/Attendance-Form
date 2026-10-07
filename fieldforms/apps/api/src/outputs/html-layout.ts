@@ -101,28 +101,28 @@ ${body}
  * document or resource. The CSP already blocks the fetches; this removes the tags themselves.
  */
 const BLOCKED = 'script|base|meta|link|iframe|frame|frameset|object|embed|applet|portal';
-const SCRIPT_ELEMENT = /<script\b[\s\S]*?<\/script\s*>/gi;
-/**
- * A start tag with quoted attributes (which may contain '>'). One left open at the end would be
- * closed by whatever follows it in our document, so it runs to the end.
+/*
+ * Each pattern below succeeds once it has started (anything left open runs to the end, as a
+ * browser would read it: what follows in our document would only close it), so every pass is
+ * linear however the template output is crafted.
  */
+/** A script element and its content. */
+const SCRIPT_ELEMENT = /<script(?=[\s/>]|$)[\s\S]*?(?:<\/script[^>]*(?:>|$)|$)/gi;
+/** A start tag with quoted attributes, which may contain '>'. */
 const BLOCKED_TAG = new RegExp(
-  `<(?:${BLOCKED})(?=[\\s/>]|$)(?:[^>"']|"[^"]*"|'[^']*')*(?:>|$)`,
+  `<(?:${BLOCKED})(?=[\\s/>]|$)(?:[^>"']|"[^"]*(?:"|$)|'[^']*(?:'|$))*(?:>|$)`,
   'gi',
 );
-const BLOCKED_END = new RegExp(`</(?:${BLOCKED})(?=[\\s/>]|$)[^>]*>`, 'gi');
-/** Whatever is left that could still open one (an unterminated tag) becomes text. */
+const BLOCKED_END = new RegExp(`</(?:${BLOCKED})(?=[\\s/>]|$)[^>]*(?:>|$)`, 'gi');
+/** Removing a tag can join the text around it into a new one ("<me<meta>ta"): made text. */
 const BLOCKED_OPEN = new RegExp(`<(/?)(${BLOCKED})(?=[\\s/>]|$)`, 'gi');
 
 export function sanitizeTemplateHtml(html: string): string {
-  let out = html;
-  let before: string;
-  // Removing one tag can join the text around it into another, so repeat until nothing changes.
-  do {
-    before = out;
-    out = out.replace(SCRIPT_ELEMENT, '').replace(BLOCKED_TAG, '').replace(BLOCKED_END, '');
-  } while (out !== before);
-  return out.replace(BLOCKED_OPEN, '&lt;$1$2');
+  return html
+    .replace(SCRIPT_ELEMENT, '')
+    .replace(BLOCKED_TAG, '')
+    .replace(BLOCKED_END, '')
+    .replace(BLOCKED_OPEN, '&lt;$1$2');
 }
 
 /** A rendered HTML template inside our own document. */
@@ -308,11 +308,11 @@ export function builtInHtml(model: DocumentModel, assets: LayoutImages): string 
   const footer = model.branding.footer
     ? `<div class="text">${escapeHtml(model.branding.footer)}</div>`
     : '';
-  parts.push(
-    `<footer>${footer}<div>${escapeHtml(model.form.name)} · reference ${escapeHtml(
-      model.submission.shortId,
-    )} · ${escapeHtml(model.submission.url)}</div></footer>`,
-  );
+  const trail = [model.form.name, `reference ${model.submission.shortId}`, model.submission.url]
+    .filter(Boolean)
+    .map(escapeHtml)
+    .join(' · ');
+  parts.push(`<footer>${footer}<div>${trail}</div></footer>`);
 
   return htmlDocument(documentTitle(model), parts.filter(Boolean).join('\n'), layoutCss(colour));
 }

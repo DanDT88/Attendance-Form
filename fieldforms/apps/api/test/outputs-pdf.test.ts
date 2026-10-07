@@ -267,17 +267,38 @@ describe('PDF: an HTML template', () => {
 
   it('strips blocked tags however they are written', () => {
     expect(sanitizeTemplateHtml('<p>a</p><BASE HREF=x><p>b</p>')).toBe('<p>a</p><p>b</p>');
-    expect(sanitizeTemplateHtml('<me<meta>ta http-equiv=refresh content=0>x')).toBe('x');
-    expect(sanitizeTemplateHtml('x<script src=y>')).toBe('x');
-    // Left open at the end: our closing tags would complete it, so it goes.
-    expect(sanitizeTemplateHtml('x<meta http-equiv="refresh" content="0;url=y"')).toBe('x');
-    // An unbalanced quote: made text.
-    expect(sanitizeTemplateHtml('x<meta http-equiv="refresh" content="0;url=y')).toBe(
-      'x&lt;meta http-equiv="refresh" content="0;url=y',
+    expect(sanitizeTemplateHtml('<p>a</p></Script ><p>b</p>')).toBe('<p>a</p><p>b</p>');
+    // A tag joined together by a removal is left as text.
+    expect(sanitizeTemplateHtml('<me<meta>ta http-equiv=refresh content=0>x')).toBe(
+      '&lt;meta http-equiv=refresh content=0>x',
     );
+    expect(sanitizeTemplateHtml('<scr<script>x</script>ipt>alert(2)</script>')).toBe('alert(2)');
+    expect(sanitizeTemplateHtml('<me</meta>ta>')).toBe('&lt;meta>');
+    // Left open at the end, our own closing tags would complete it, so the rest goes.
+    expect(sanitizeTemplateHtml('x<script src=y>')).toBe('x');
+    expect(sanitizeTemplateHtml('x<meta http-equiv="refresh" content="0;url=y"')).toBe('x');
+    expect(sanitizeTemplateHtml('x<meta http-equiv="refresh" content="0;url=y')).toBe('x');
+    expect(sanitizeTemplateHtml("x<base href='http://y")).toBe('x');
     expect(sanitizeTemplateHtml('<basefont><metadata><p title="<meta>">ok</p>')).toBe(
       '<basefont><metadata><p title="">ok</p>',
     );
+  });
+
+  it('takes linear time on output crafted to make it backtrack', () => {
+    const n = 100_000;
+    for (const input of [
+      '<script '.repeat(n),
+      '<meta "'.repeat(n),
+      "<meta x='a".repeat(n),
+      '</meta '.repeat(n),
+      `${'<me'.repeat(n)}<meta>${'ta>'.repeat(n)}`,
+      `<meta${' a="b"'.repeat(n)}`,
+    ]) {
+      const started = Date.now();
+      const out = sanitizeTemplateHtml(input);
+      expect(Date.now() - started).toBeLessThan(1_000);
+      expect(out).not.toMatch(/<(script|meta)(?=[\s/>]|$)/i);
+    }
   });
 });
 

@@ -9,8 +9,14 @@ import { fileEntries, shareable, SUBMISSION_SCHEMA } from './json.js';
  */
 
 /** Characters XML 1.0 does not allow at all (control characters, lone surrogates, U+FFFE/F). */
-const INVALID = /[^\t\n\r -퟿-�\u{10000}-\u{10FFFF}]/gu;
-const TEXT_ENTITIES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+const INVALID = /[^\t\n\r\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu;
+/** A carriage return too, which parsers would otherwise fold into the line feed after it. */
+const TEXT_ENTITIES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '\r': '&#13;',
+};
 /** Tabs and line breaks too, so attribute-value normalisation does not turn them into spaces. */
 const ATTR_ENTITIES: Record<string, string> = {
   ...TEXT_ENTITIES,
@@ -24,7 +30,7 @@ const ATTR_ENTITIES: Record<string, string> = {
 export const xmlText = (v: unknown): string =>
   String(v ?? '')
     .replace(INVALID, '')
-    .replace(/[&<>]/g, (c) => TEXT_ENTITIES[c]!);
+    .replace(/[&<>\r]/g, (c) => TEXT_ENTITIES[c]!);
 
 export const xmlAttr = (v: unknown): string =>
   String(v ?? '')

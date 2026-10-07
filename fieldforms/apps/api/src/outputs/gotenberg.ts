@@ -17,14 +17,31 @@ export function gotenbergConverter(opts: {
   username?: string;
   password?: string;
 }): PdfConverter {
-  const base = opts.url?.replace(/\/+$/, '');
+  let base: string | undefined;
+  let username = opts.username;
+  let password = opts.password;
+  if (opts.url) {
+    try {
+      // fetch refuses URLs with credentials: "http://user:pass@gotenberg:3000" becomes basic auth.
+      const u = new URL(opts.url);
+      if (u.username && !username) {
+        username = decodeURIComponent(u.username);
+        password = decodeURIComponent(u.password);
+      }
+      u.username = '';
+      u.password = '';
+      base = u.toString().replace(/\/+$/, '');
+    } catch {
+      base = undefined;
+    }
+  }
   const headers: Record<string, string> = {};
   const secrets: Record<string, string> = {};
-  if (opts.username) {
-    const token = Buffer.from(`${opts.username}:${opts.password ?? ''}`).toString('base64');
+  if (username) {
+    const token = Buffer.from(`${username}:${password ?? ''}`).toString('base64');
     headers.authorization = `Basic ${token}`;
     secrets.token = token;
-    if (opts.password) secrets.password = opts.password;
+    if (password) secrets.password = password;
   }
 
   async function convert(path: string, form: FormData, signal: AbortSignal): Promise<Buffer> {

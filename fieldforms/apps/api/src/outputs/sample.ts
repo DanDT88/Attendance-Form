@@ -29,7 +29,10 @@ function sampleText(f: Extract<LeafField, { type: 'text' }>): string {
 }
 
 function sampleNumber(f: Extract<LeafField, { type: 'number' }>): number {
-  const clamp = (v: number) => Math.min(f.max ?? v, Math.max(f.min ?? v, v));
+  const clamp = (v: number) => {
+    const above = f.min !== undefined ? Math.max(f.min, v) : v;
+    return f.max !== undefined ? Math.min(f.max, above) : above;
+  };
   let v = clamp(3);
   if (f.decimals !== undefined) v = clamp(Number(v.toFixed(f.decimals)));
   return v;
