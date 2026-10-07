@@ -50,8 +50,8 @@ export async function embeddedImages(
 }
 
 /**
- * A Liquid HTML template: it sees the template data plus `_images` (data: URIs by media name)
- * and the logo in `_branding.logo`. Every value is HTML-escaped (`| raw` cannot undo it) and the
+ * A Liquid HTML template: it sees the template data plus `_images` (data: URIs by media name,
+ * and `_logo`) and the logo in `_branding.logo`. Every value is HTML-escaped (`| raw` cannot undo it) and the
  * output goes into the body of our own document.
  */
 async function templateHtml(
@@ -62,6 +62,8 @@ async function templateHtml(
   const assets = await embeddedImages(model, ctx);
   const images: Record<string, string> = {};
   for (const [name, uri] of assets.images) if (uri) images[name] = uri;
+  // The Word and HTML starter templates use _images._logo; _branding.logo stays for HTML.
+  if (assets.logo) images._logo = assets.logo;
   const data = templateData(model);
   const source =
     typeof template.content === 'string' ? template.content : template.content.toString('utf8');

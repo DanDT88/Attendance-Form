@@ -470,6 +470,9 @@ export function displayValue(
       return `${(v as unknown[]).length} photo${(v as unknown[]).length === 1 ? '' : 's'}`;
     case 'signature':
       return 'Signed';
+    case 'datetime':
+      // Stored as local "2026-10-07T14:30"; people read "2026-10-07 14:30".
+      return typeof v === 'string' ? v.replace('T', ' ') : toText(v as Value);
     case 'group':
       return `${(v as unknown[]).length} row${(v as unknown[]).length === 1 ? '' : 's'}`;
     default:
