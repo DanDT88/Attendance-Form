@@ -100,7 +100,9 @@ ${body}
  * (http-equiv refresh navigates, even from the body) and everything that embeds another
  * document or resource. The CSP already blocks the fetches; this removes the tags themselves.
  */
-const BLOCKED = 'script|base|meta|link|iframe|frame|frameset|object|embed|applet|portal';
+export const BLOCKED_ELEMENTS =
+  'script|base|meta|link|iframe|frame|frameset|object|embed|applet|portal';
+const BLOCKED = BLOCKED_ELEMENTS;
 /*
  * Each pattern below succeeds once it has started (anything left open runs to the end, as a
  * browser would read it: what follows in our document would only close it), so every pass is

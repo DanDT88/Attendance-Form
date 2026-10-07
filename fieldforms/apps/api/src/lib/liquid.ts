@@ -68,6 +68,11 @@ export class TemplateError extends Error {
   readonly permanent = true;
 }
 
+/** The engine (configured as above) for code that parses and analyses templates without rendering. */
+export function liquidParser(): Liquid {
+  return get('text');
+}
+
 /** Parses a template so errors are reported when it is saved, not when it is first used. */
 export function checkLiquid(source: string): string | null {
   try {

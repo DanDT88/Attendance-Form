@@ -9,14 +9,14 @@ import {
   ForTag,
   IncludeTag,
   LayoutTag,
-  Liquid,
   RenderTag,
   TablerowTag,
   toValueSync,
   type Template,
   type Variable,
 } from 'liquidjs';
-import { checkLiquid } from '../../lib/liquid.js';
+import { checkLiquid, liquidParser } from '../../lib/liquid.js';
+import { BLOCKED_ELEMENTS } from '../html-layout.js';
 import {
   compileTemplate,
   IMAGE_NAME,
@@ -277,17 +277,9 @@ function analyzeDocx(content: Buffer, versions: Versions): TemplateAnalysis {
 
 // ---------------------------------------------------------------- HTML (Liquid)
 
-/** A Liquid engine configured like lib/liquid.ts, used only to parse and analyse. */
-const liquid = new Liquid({
-  templates: {},
-  relativeReference: false,
-  dynamicPartials: false,
-  strictFilters: true,
-  strictVariables: false,
-  ownPropertyOnly: true,
-  parseLimit: 100_000,
-});
-liquid.registerFilter('raw', (v: unknown) => v);
+const liquid = liquidParser();
+/** Tags the PDF renderer removes (scripts, frames, external resources). */
+const REMOVED_TAG = new RegExp(`<(${BLOCKED_ELEMENTS})(?=[\\s/>]|$)`, 'gi');
 
 /** A variable's leading names ("items", "qty"), stopping at a computed segment. */
 function namesOf(v: Variable): string[] {
@@ -320,6 +312,12 @@ function analyzeHtml(source: string, versions: Versions): TemplateAnalysis {
     };
   }
   const r = new Report(versions);
+  const removed = new Set([...source.matchAll(REMOVED_TAG)].map((m) => m[1]!.toLowerCase()));
+  if (removed.size) {
+    r.warnings.add(
+      `PDFs leave out ${[...removed].map((t) => `<${t}>`).join(', ')}: scripts, frames and external files are not loaded`,
+    );
+  }
   const globals = liquid.analyzeSync(templates, { partials: false }).globals;
   for (const vars of Object.values(globals)) {
     for (const v of vars) {

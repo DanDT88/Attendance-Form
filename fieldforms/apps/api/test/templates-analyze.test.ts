@@ -189,4 +189,17 @@ describe('analyzing HTML (Liquid) templates', () => {
       warnings: [],
     });
   });
+
+  it('warns about tags the PDF leaves out', async () => {
+    const a = await analyzeTemplate(
+      'html',
+      '<SCRIPT>x()</script><link rel="stylesheet" href="https://x"><iframe src=x></iframe><p>{{ area }}</p>',
+      VERSIONS,
+    );
+    expect(a.errors).toEqual([]);
+    expect(a.warnings).toEqual([
+      'PDFs leave out <script>, <link>, <iframe>: scripts, frames and external files are not loaded',
+    ]);
+    expect((await analyzeTemplate('html', '<p>a <scripted> b</p>', VERSIONS)).warnings).toEqual([]);
+  });
 });
