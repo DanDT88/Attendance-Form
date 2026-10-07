@@ -26,6 +26,7 @@ import {
  * SECRETS_PRIVATE_KEY_PREVIOUS can still open values during a rotation.
  */
 export class SecretsError extends Error {
+  override readonly name = 'SecretsError';
   readonly permanent = true;
 }
 

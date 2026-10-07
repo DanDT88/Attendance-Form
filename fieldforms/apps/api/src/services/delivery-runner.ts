@@ -35,8 +35,8 @@ import {
 } from '../destinations/types.js';
 import type { BlobStore } from '../lib/blobstore.js';
 import { renderLiquid } from '../lib/liquid.js';
-import type { NetworkPolicy } from '../lib/netguard.js';
-import type { SecretOpener } from '../lib/secrets.js';
+import { NetworkPolicyError, type NetworkPolicy } from '../lib/netguard.js';
+import { SecretsError, type SecretOpener } from '../lib/secrets.js';
 import type { PdfConverter, RenderedFile, TemplateRef } from '../outputs/types.js';
 import type * as documents from './documents.js';
 import type { JobQueue } from './registers.js';
@@ -126,11 +126,10 @@ export function classify(err: unknown, secrets: Record<string, string> = {}): Cl
   if (e?.name === 'TimeoutError' || e?.name === 'AbortError')
     return { permanent: false, errorClass: 'unreachable', message: 'Timed out', detail };
   if (e?.permanent === true) {
-    const name = e.name ?? '';
     const errorClass: ErrorClass =
-      name === 'NetworkPolicyError'
+      err instanceof NetworkPolicyError
         ? 'network_policy'
-        : name === 'SecretsError'
+        : err instanceof SecretsError
           ? 'settings'
           : 'template';
     // These messages are written to be safe (policy, template and secret errors).

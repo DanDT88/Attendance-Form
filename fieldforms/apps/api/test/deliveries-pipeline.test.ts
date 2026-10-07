@@ -753,3 +753,35 @@ describe('other alerts', () => {
     expect(mails.some((m) => m.to.includes('ops@acme.test'))).toBe(true);
   });
 });
+
+describe('error classification', () => {
+  it('classes policy, secret, template and unknown errors', async () => {
+    const { classify } = await import('../src/services/delivery-runner.js');
+    const { NetworkPolicyError } = await import('../src/lib/netguard.js');
+    const { SecretsError } = await import('../src/lib/secrets.js');
+    const { RenderError } = await import('../src/outputs/types.js');
+    expect(
+      classify(new NetworkPolicyError('169.254.169.254 is a linkLocal address')),
+    ).toMatchObject({
+      permanent: true,
+      errorClass: 'network_policy',
+    });
+    expect(classify(new SecretsError('A stored secret could not be opened'))).toMatchObject({
+      permanent: true,
+      errorClass: 'settings',
+    });
+    expect(classify(new RenderError('Unknown tag'))).toMatchObject({
+      permanent: true,
+      errorClass: 'template',
+    });
+    expect(classify(Object.assign(new Error('x'), { name: 'TimeoutError' }))).toMatchObject({
+      permanent: false,
+      errorClass: 'unreachable',
+    });
+    expect(classify(new Error('boom'))).toMatchObject({
+      permanent: false,
+      errorClass: 'internal',
+      message: 'Unexpected error',
+    });
+  });
+});

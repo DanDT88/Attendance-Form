@@ -25,6 +25,7 @@ export interface NetworkPolicy {
 }
 
 export class NetworkPolicyError extends Error {
+  override readonly name = 'NetworkPolicyError';
   readonly permanent = true;
   constructor(detail: string) {
     super(`Address not allowed: ${detail}`);

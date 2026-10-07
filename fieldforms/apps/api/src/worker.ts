@@ -3,7 +3,8 @@ import nodemailer from 'nodemailer';
 import { z } from 'zod';
 import { loadConfig } from './config.js';
 import { createDb } from './db/index.js';
-import { DEFAULT_ENDPOINTS, type Mailer as DestinationMailer } from './destinations/types.js';
+import { createSmtpMailer } from './destinations/mailer.js';
+import { DEFAULT_ENDPOINTS } from './destinations/types.js';
 import { createBlobStore } from './lib/blobstore.js';
 import { parseNetworkPolicy } from './lib/netguard.js';
 import { createSecretOpener } from './lib/secrets.js';
@@ -70,23 +71,17 @@ const mailer: Mailer = {
   },
 };
 
-/** The same transport for destinations, which need the message id and the server's reply. */
-const destinationMailer: DestinationMailer = {
-  async send(msg) {
-    const info = await transport.sendMail({
-      from: mailEnv.MAIL_FROM,
-      to: msg.to,
-      cc: msg.cc,
-      replyTo: msg.replyTo,
-      subject: msg.subject,
-      html: msg.html,
-      text: msg.text,
-      attachments: msg.attachments,
-      headers: msg.headers,
-    });
-    return { messageId: info.messageId, response: info.response };
-  },
-};
+/** Destinations and alerts use their own transport: timeouts inside an attempt's deadline, and
+ * no file or URL access from message content. */
+const destinationMailer = createSmtpMailer({
+  host: mailEnv.SMTP_HOST,
+  port: mailEnv.SMTP_PORT,
+  secure: mailEnv.SMTP_SECURE === 'true',
+  requireTLS: mailEnv.SMTP_REQUIRE_TLS === 'true',
+  user: mailEnv.SMTP_USER,
+  password: mailEnv.SMTP_PASSWORD,
+  from: mailEnv.MAIL_FROM,
+});
 
 const { db } = createDb(cfg.DATABASE_URL);
 const blobs = createBlobStore(cfg);
