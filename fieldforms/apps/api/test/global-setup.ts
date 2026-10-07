@@ -1,6 +1,6 @@
 import pg from 'pg';
 import { migrate } from '../src/db/migrate.js';
-import { TEMPLATE_DB, TEST_APP_PASSWORD, adminUrl, dbUrl } from './env.js';
+import { TEMPLATE_DB, TEST_APP_PASSWORD, TEST_DB_PREFIX, adminUrl, dbUrl } from './env.js';
 
 /** Builds one migrated template database; each test file clones it (CREATE DATABASE ... TEMPLATE). */
 export default async function setup(): Promise<() => Promise<void>> {
@@ -22,7 +22,8 @@ export default async function setup(): Promise<() => Promise<void>> {
 
 async function dropTestDatabases(c: pg.Client): Promise<void> {
   const { rows } = await c.query<{ datname: string }>(
-    `SELECT datname FROM pg_database WHERE datname LIKE 'ff\\_test\\_%'`,
+    `SELECT datname FROM pg_database WHERE datname LIKE $1`,
+    [`${TEST_DB_PREFIX.replace(/_/g, '\\_')}\\_%`],
   );
   for (const r of rows) await c.query(`DROP DATABASE IF EXISTS "${r.datname}" WITH (FORCE)`);
 }

@@ -5,7 +5,15 @@
 export const TEST_ADMIN_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://fieldforms:devpassword@localhost:5432/postgres';
 
-export const TEMPLATE_DB = 'ff_test_template';
+/**
+ * Test databases are named <prefix>_<random>. Separate checkouts running tests against the same
+ * Postgres at once must use different prefixes (TEST_DB_PREFIX), because each run drops its
+ * prefix's leftover databases when it starts (so "ffa" and "ffb", not "ff" and "ff_b").
+ */
+export const TEST_DB_PREFIX = /^[a-z][a-z0-9_]{0,30}$/.test(process.env.TEST_DB_PREFIX ?? '')
+  ? process.env.TEST_DB_PREFIX!
+  : 'ff_test';
+export const TEMPLATE_DB = `${TEST_DB_PREFIX}_template`;
 /**
  * The fieldforms_app role is cluster-wide, so tests must set the same password the developer's
  * running API uses on this Postgres, or a test run would lock that API out.

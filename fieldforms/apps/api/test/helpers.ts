@@ -9,7 +9,7 @@ import { hashSecret } from '../src/auth/passwords.js';
 import { loadConfig } from '../src/config.js';
 import { createDb, type Db } from '../src/db/index.js';
 import { LocalBlobStore } from '../src/lib/blobstore.js';
-import { TEMPLATE_DB, adminUrl, dbUrl } from './env.js';
+import { TEMPLATE_DB, TEST_DB_PREFIX, adminUrl, dbUrl } from './env.js';
 
 export const PIN = '482915';
 export const PASSWORD = 'correct horse battery';
@@ -49,7 +49,7 @@ export interface TestContext {
 
 /** A fresh database cloned from the migrated template, the API wired to it, and seeded fixtures. */
 export async function createTestContext(): Promise<TestContext> {
-  const name = `ff_test_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  const name = `${TEST_DB_PREFIX}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
   const admin = new pg.Client({ connectionString: adminUrl() });
   await admin.connect();
   await admin.query(`CREATE DATABASE ${name} TEMPLATE ${TEMPLATE_DB}`);
