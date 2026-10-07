@@ -466,3 +466,261 @@ table.report td {
   margin: 0;
   padding-left: 20px;
 }
+
+/* ------------------------------------------------------------ forms (Phase 2) */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.list li:first-child {
+  border-top: none;
+}
+
+.form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field-label {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.field .help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.field.has-error input,
+.field.has-error select,
+.field.has-error textarea {
+  border-color: var(--bad);
+}
+.field.note {
+  background: #f8fafc;
+  border-left: 3px solid var(--info);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+.req {
+  color: var(--bad);
+}
+.inline-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.inline-input input {
+  flex: 1 1 160px;
+  width: auto;
+}
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.calc {
+  display: block;
+  padding: 8px 10px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  font-weight: 600;
+  min-height: 40px;
+}
+fieldset.group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+fieldset.group legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+.group-row {
+  border-left: 3px solid var(--line);
+  padding-left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.button.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 140px;
+}
+.thumb.large {
+  width: 260px;
+}
+.stack-img {
+  position: relative;
+  width: 100%;
+}
+.stack-img img {
+  width: 100%;
+  display: block;
+  border-radius: 6px;
+}
+.stack-img img.layer {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+.signature canvas {
+  width: 100%;
+  height: auto;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  background: #fff;
+  touch-action: none;
+}
+.signature-img {
+  max-width: 260px;
+  max-height: 100px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.92);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  padding-top: max(10px, env(safe-area-inset-top));
+}
+.annotate-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+.annotate-toolbar .active {
+  outline: 2px solid #fff;
+}
+.swatch {
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 2px solid #64748b;
+  border-radius: 50%;
+}
+.swatch.on {
+  border-color: #fff;
+  outline: 2px solid #fff;
+}
+.annotate-stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+.annotate-stage img,
+.annotate-stage canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.annotate-stage canvas {
+  position: absolute;
+  touch-action: none;
+  cursor: crosshair;
+}
+/* The canvas has the photo's aspect ratio and the same max size, so it sits exactly over it. */
+
+.answers {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.answer-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.builder-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 2fr;
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .builder-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.field-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field-list.nested {
+  margin: 4px 0 4px 16px;
+}
+.field-item {
+  width: 100%;
+  background: #f8fafc;
+  color: var(--text);
+  border: 1px solid var(--line);
+  text-align: left;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  position: relative;
+}
+.field-item.active {
+  border-color: var(--navy);
+  background: #e8eef7;
+}
+.field-item .flag {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+.issues {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--bad);
+}
+textarea.json {
+  font-size: 13px;
+}

@@ -70,7 +70,7 @@ export function RegisterDetailPage() {
   return (
     <div className="stack">
       <div className="card">
-        <h2>
+        <h2 className="capitalize">
           {s.kind.replace('_', ' ')} register · {s.site_name} · {s.work_date}
         </h2>
         <dl className="facts">
