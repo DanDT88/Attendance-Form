@@ -1,0 +1,115 @@
+# FieldForms: `docker compose up` from a clean checkout gives a working app at http://localhost:8080
+# with demo data. Every value has a development default; production MUST override the secrets
+# through a .env file (see .env.example) — the defaults below are for local use only.
+name: fieldforms
+
+x-api-env: &api-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://fieldforms_app:${APP_DB_PASSWORD:-dev-app-password}@postgres:5432/${POSTGRES_DB:-fieldforms}
+  PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  TRUST_PROXY: ${TRUST_PROXY:-true}
+  # Photos on a Docker volume by default. For S3-compatible storage set BLOB_STORE=s3 and the S3_* values.
+  BLOB_STORE: ${BLOB_STORE:-local}
+  BLOB_LOCAL_DIR: /data/blobs
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  S3_REGION: ${S3_REGION:-af-south-1}
+  S3_BUCKET: ${S3_BUCKET:-fieldforms}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+  S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+  OIDC_PROVIDERS: ${OIDC_PROVIDERS:-}
+  OIDC_MICROSOFT_ISSUER: ${OIDC_MICROSOFT_ISSUER:-}
+  OIDC_MICROSOFT_CLIENT_ID: ${OIDC_MICROSOFT_CLIENT_ID:-}
+  OIDC_MICROSOFT_CLIENT_SECRET: ${OIDC_MICROSOFT_CLIENT_SECRET:-}
+  OIDC_MICROSOFT_LABEL: Microsoft 365
+  OIDC_GOOGLE_ISSUER: ${OIDC_GOOGLE_ISSUER:-}
+  OIDC_GOOGLE_CLIENT_ID: ${OIDC_GOOGLE_CLIENT_ID:-}
+  OIDC_GOOGLE_CLIENT_SECRET: ${OIDC_GOOGLE_CLIENT_SECRET:-}
+  OIDC_GOOGLE_LABEL: Google Workspace
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fieldforms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-fieldforms}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    ports: ['127.0.0.1:5432:5432']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-fieldforms} -d ${POSTGRES_DB:-fieldforms}']
+      interval: 5s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ['127.0.0.1:8025:8025']
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+
+  # One-shot: applies migrations as the database owner and sets the app role's password.
+  migrate:
+    build: { context: ., dockerfile: docker/api.Dockerfile }
+    image: fieldforms-api
+    command: ['node', 'dist/migrate.js']
+    healthcheck: { disable: true }
+    environment:
+      MIGRATION_DATABASE_URL: postgres://${POSTGRES_USER:-fieldforms}:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/${POSTGRES_DB:-fieldforms}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-dev-app-password}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: 'no'
+
+  # One-shot: loads demo data into an empty database. Does nothing if data exists, or if
+  # SEED_DEMO_DATA is not "true" (set it to false in production).
+  seed:
+    image: fieldforms-api
+    command: ['sh', '-c', 'if [ "$${SEED_DEMO_DATA}" = "true" ]; then node dist/seed.js; else echo "seed skipped"; fi']
+    healthcheck: { disable: true }
+    environment:
+      <<: *api-env
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    volumes: [blobs:/data/blobs]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: 'no'
+
+  api:
+    image: fieldforms-api
+    environment: *api-env
+    volumes: [blobs:/data/blobs]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  worker:
+    image: fieldforms-api
+    command: ['node', 'dist/worker.js']
+    # The image's health check probes the HTTP API, which the worker does not serve.
+    healthcheck: { disable: true }
+    environment:
+      <<: *api-env
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-FieldForms <fieldforms@localhost>}
+      GOTENBERG_URL: http://gotenberg:3000
+    volumes: [blobs:/data/blobs]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  web:
+    build: { context: ., dockerfile: docker/web.Dockerfile }
+    image: fieldforms-web
+    ports: ['${WEB_PORT:-8080}:8080']
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  blobs:
