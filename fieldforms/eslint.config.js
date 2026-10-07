@@ -12,6 +12,10 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
   {
+    files: ['**/test/**/*.ts', '**/e2e/**/*.ts'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       // The calculation engine and everything else must never evaluate strings as code.
