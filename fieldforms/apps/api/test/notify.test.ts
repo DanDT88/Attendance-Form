@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LocalBlobStore } from '../src/lib/blobstore.js';
@@ -69,11 +70,11 @@ describe('register summary email', () => {
       .execute();
     expect(log).toEqual([expect.objectContaining({ status: 'failed', detail: 'SMTP down' })]);
     // pg-boss is still retrying this job, so the sweeper leaves it alone for now.
-    expect(await findUndelivered(t.db)).not.toContain(id);
+    expect(await findUndelivered(t.db, 0)).not.toContain(id);
 
     const ok = recordingMailer();
     expect(await deliverRegisterSummary(t.db, blobs, ok.mailer, noPdf, id)).toBe('sent');
-    expect(await findUndelivered(t.db)).not.toContain(id);
+    expect(await findUndelivered(t.db, 0)).not.toContain(id);
   });
 
   it('sweeps a failed register again an hour later, but gives up after three retry cycles', async () => {
@@ -92,17 +93,42 @@ describe('register summary email', () => {
         .execute();
 
     await fail(1);
-    expect(await findUndelivered(t.db)).toContain(id);
+    expect(await findUndelivered(t.db, 0)).toContain(id);
 
     // Without a cap a broken mail server would be retried every 10 minutes for a week, filling the
     // append-only log. After the cap the register waits in the dead-letter queue.
     await fail(MAX_SWEEP_FAILURES - 1);
+    expect(await findUndelivered(t.db, 0)).not.toContain(id);
+  });
+
+  it('re-enqueues registers the API never managed to enqueue, once they are 15 minutes old', async () => {
+    const id = await submit();
+    expect(await findUndelivered(t.db, 0)).toContain(id);
+    // A fresh register is left to the job the API enqueued for it.
     expect(await findUndelivered(t.db)).not.toContain(id);
   });
 
-  it('re-enqueues registers the API never managed to enqueue', async () => {
+  it('never starts a second job while one is queued, retrying or running', async () => {
     const id = await submit();
-    expect(await findUndelivered(t.db)).toContain(id);
+    // pg-boss's job table, as the worker's database has it (tests run without pg-boss).
+    await sql`CREATE SCHEMA IF NOT EXISTS pgboss`.execute(t.owner);
+    await sql`CREATE TABLE IF NOT EXISTS pgboss.job (name text, data jsonb, state text)`.execute(
+      t.owner,
+    );
+    await sql`GRANT USAGE ON SCHEMA pgboss TO fieldforms_app`.execute(t.owner);
+    await sql`GRANT SELECT ON pgboss.job TO fieldforms_app`.execute(t.owner);
+    const job = (state: string) =>
+      sql`INSERT INTO pgboss.job VALUES ('register-notify', ${JSON.stringify({ submissionId: id })}::jsonb, ${state})`.execute(
+        t.owner,
+      );
+    await job('completed');
+    expect(await findUndelivered(t.db, 0)).toContain(id);
+    for (const state of ['created', 'retry', 'active']) {
+      await sql`DELETE FROM pgboss.job`.execute(t.owner);
+      await job(state);
+      expect(await findUndelivered(t.db, 0)).not.toContain(id);
+    }
+    await sql`DROP SCHEMA pgboss CASCADE`.execute(t.owner);
   });
 
   it('still sends when the PDF renderer fails, and says so in the log', async () => {
@@ -141,6 +167,6 @@ describe('register summary email', () => {
     const m = recordingMailer();
     expect(await deliverRegisterSummary(t.db, blobs, m.mailer, noPdf, id)).toBe('skipped');
     expect(m.sent).toHaveLength(0);
-    expect(await findUndelivered(t.db)).not.toContain(id);
+    expect(await findUndelivered(t.db, 0)).not.toContain(id);
   });
 });

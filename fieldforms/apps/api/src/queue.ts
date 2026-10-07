@@ -51,7 +51,8 @@ export async function createBoss(connectionString: string): Promise<PgBoss> {
 export function bossQueue(boss: PgBoss): JobQueue {
   return {
     async enqueueRegisterNotify(submissionId) {
-      // singletonKey: a second enqueue for the same register while one is queued is a no-op.
+      // singletonKey is not enforced on standard queues (pg-boss 10); the sweeper checks for a live
+      // job instead (notify.ts liveJobClause) and delivery checks notification_log.
       await boss.send(
         REGISTER_NOTIFY,
         { submissionId },

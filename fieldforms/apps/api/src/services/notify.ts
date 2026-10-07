@@ -1,5 +1,5 @@
 import { formatLocal } from '@fieldforms/shared';
-import { sql } from 'kysely';
+import { sql, type RawBuilder } from 'kysely';
 import type { Db } from '../db/index.js';
 import type { BlobStore } from '../lib/blobstore.js';
 
@@ -242,16 +242,39 @@ export const MAX_SWEEP_FAILURES = 27;
  * (the API failed to enqueue them), or failed more than an hour ago (the job's own retries are
  * spent) and not yet given up on.
  */
-export async function findUndelivered(db: Db): Promise<string[]> {
+/** The sweeper leaves anything younger than this to the job the API enqueued for it. */
+export const SWEEP_MIN_AGE_MINUTES = 15;
+
+/**
+ * Excludes rows that still have a job queued, retrying or running. pg-boss does not enforce
+ * singletonKey on standard queues, so without this the sweeper would start a second retry chain
+ * next to one that is backing off, and both could send. (Tests run without pg-boss.)
+ */
+async function liveJobClause(db: Db, queue: string, key: string, id: RawBuilder<unknown>) {
+  const { rows } = await sql<{
+    t: string | null;
+  }>`SELECT to_regclass('pgboss.job')::text AS t`.execute(db);
+  if (!rows[0]?.t) return sql``;
+  return sql`AND NOT EXISTS (SELECT 1 FROM pgboss.job j WHERE j.name = ${queue}
+    AND j.data->>${key} = ${id}::text AND j.state IN ('created', 'retry', 'active'))`;
+}
+
+export async function findUndelivered(
+  db: Db,
+  minAgeMinutes = SWEEP_MIN_AGE_MINUTES,
+): Promise<string[]> {
+  const live = await liveJobClause(db, 'register-notify', 'submissionId', sql`r.id`);
   const rows = await sql<{ id: string }>`
     SELECT r.id FROM register_submissions r
     WHERE r.kind IN ('start', 'end') AND r.source = 'app'
       AND r.server_received_at > now() - interval '7 days'
+      AND r.server_received_at <= now() - make_interval(mins => ${minAgeMinutes})
       AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.submission_id = r.id AND n.status IN ('sent', 'skipped'))
       AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.submission_id = r.id AND n.status = 'failed'
                       AND n.created_at > now() - interval '1 hour')
       AND (SELECT count(*) FROM notification_log n WHERE n.submission_id = r.id AND n.status = 'failed')
           < ${MAX_SWEEP_FAILURES}
+      ${live}
     LIMIT 500
   `.execute(db);
   return rows.rows.map((r) => r.id);
@@ -364,15 +387,21 @@ export async function deliverDispatchEmail(
 }
 
 /** Open dispatches from the last week with no email outcome yet, under the same retry cap. */
-export async function findUnnotifiedDispatches(db: Db): Promise<string[]> {
+export async function findUnnotifiedDispatches(
+  db: Db,
+  minAgeMinutes = SWEEP_MIN_AGE_MINUTES,
+): Promise<string[]> {
+  const live = await liveJobClause(db, 'dispatch-notify', 'dispatchId', sql`d.id`);
   const rows = await sql<{ id: string }>`
     SELECT d.id FROM dispatches d
     WHERE d.status = 'open' AND d.created_at > now() - interval '7 days'
+      AND d.created_at <= now() - make_interval(mins => ${minAgeMinutes})
       AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.dispatch_id = d.id AND n.status IN ('sent', 'skipped'))
       AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.dispatch_id = d.id AND n.status = 'failed'
                       AND n.created_at > now() - interval '1 hour')
       AND (SELECT count(*) FROM notification_log n WHERE n.dispatch_id = d.id AND n.status = 'failed')
           < ${MAX_SWEEP_FAILURES}
+      ${live}
     LIMIT 500
   `.execute(db);
   return rows.rows.map((r) => r.id);

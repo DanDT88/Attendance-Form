@@ -511,7 +511,7 @@ describe('dispatch emails', () => {
         dueOn: '2026-10-10',
       })
     ).json();
-    expect(await findUnnotifiedDispatches(t.db)).toContain(d.id);
+    expect(await findUnnotifiedDispatches(t.db, 0)).toContain(d.id);
 
     const m = recording();
     expect(
@@ -527,7 +527,7 @@ describe('dispatch emails', () => {
     });
     expect(m.sent[0]!.html).toContain('Check &lt;the&gt; bins');
     expect(m.sent[0]!.html).toContain('https://ff.example/forms');
-    expect(await findUnnotifiedDispatches(t.db)).not.toContain(d.id);
+    expect(await findUnnotifiedDispatches(t.db, 0)).not.toContain(d.id);
   });
 
   it('records a skip when nobody can be emailed, or the task was cancelled first', async () => {
@@ -575,7 +575,7 @@ describe('dispatch emails', () => {
       ),
     ).toBe('skipped');
     expect(m.sent).toHaveLength(0);
-    expect(await findUnnotifiedDispatches(t.db)).not.toContain(d1.id);
+    expect(await findUnnotifiedDispatches(t.db, 0)).not.toContain(d1.id);
   });
 
   it('emails only the group members who can see the task’s site', async () => {
