@@ -1,6 +1,6 @@
 import { type Node, type Value } from '../expr/ast.js';
 import { evaluate, type Scope } from '../expr/evaluate.js';
-import { parse } from '../expr/parser.js';
+import { parse, references } from '../expr/parser.js';
 import { isBlank as exprBlank, toText, truthy } from '../expr/values.js';
 import {
   geotagValue,
@@ -475,4 +475,97 @@ export function displayValue(
     default:
       return exprBlank(v as Value) ? '' : toText(v as Value);
   }
+}
+
+// ---------------------------------------------------------------- stored submissions (Phase 3)
+
+/** Names starting with `_` are submission metadata (`_site`, `_id`...): field ids cannot. */
+const isExtra = (name: string) => name.startsWith('_');
+
+/**
+ * Evaluates an expression against a stored submission, for destination conditions and column
+ * mappings. Fields resolve through the submission's own version, exactly as when it was filled
+ * in. A field that this version does not have but another version of the form does (`knownIds`,
+ * e.g. "severity" or "items.qty") is blank, not an error, because submissions keep arriving on
+ * older versions. `_` names come from `extras`. With `row`, sibling fields of that repeat-group
+ * row resolve first (one row per group row, for `rowsFrom` mappings).
+ */
+export function evaluateExpression(
+  def: FormDefinition,
+  values: Answers,
+  src: string,
+  opts: {
+    extras?: Record<string, Value>;
+    knownIds?: ReadonlySet<string>;
+    now?: Date;
+    row?: { group: string; index: number };
+  } = {},
+): { value: Value; error: string | null } {
+  const node = ast(src);
+  if (!node) return { value: null, error: 'Invalid expression' };
+  const fields = indexFields(def);
+  const inner = scopeFor(values, fields, opts.row ?? null);
+  const extras = opts.extras ?? {};
+  const scope: Scope = {
+    get(path) {
+      const head = path[0]!;
+      if (isExtra(head)) {
+        if (path.length !== 1 || !Object.prototype.hasOwnProperty.call(extras, head))
+          return undefined;
+        return extras[head]!;
+      }
+      const v = inner.get(path);
+      if (v !== undefined) return v;
+      const key = path.join('.');
+      if (opts.knownIds?.has(key) || (opts.row && opts.knownIds?.has(`${opts.row.group}.${key}`)))
+        return null;
+      return undefined;
+    },
+  };
+  return evaluate(node, scope, { now: opts.now ?? new Date() });
+}
+
+/** Every field key ("qty", "items.qty") of every version given, for `evaluateExpression`. */
+export function fieldKeysOf(defs: FormDefinition[]): Set<string> {
+  const out = new Set<string>();
+  for (const d of defs) for (const k of indexFields(d).keys()) out.add(k);
+  return out;
+}
+
+/**
+ * Checks an expression for a destination against every version of its form: it must parse,
+ * `_` names must be known, and every field must exist in at least one version. Fields missing
+ * from some versions are warnings (they read as blank there).
+ */
+export function checkExpression(
+  versions: { version: number; definition: FormDefinition }[],
+  src: string,
+  extraNames: readonly string[],
+  rowGroup?: string,
+): { error: string | null; warnings: string[] } {
+  let node: Node;
+  try {
+    node = parse(src);
+  } catch (err) {
+    return { error: (err as Error).message, warnings: [] };
+  }
+  const indexes = versions.map((v) => ({ version: v.version, fields: indexFields(v.definition) }));
+  const warnings: string[] = [];
+  for (const path of references(node)) {
+    const name = path.join('.');
+    if (isExtra(path[0]!)) {
+      if (path.length !== 1 || !extraNames.includes(path[0]!))
+        return { error: `Unknown name "${name}"`, warnings };
+      continue;
+    }
+    const missing = indexes
+      .filter((ix) => !resolveRef(ix.fields, path, rowGroup ?? null))
+      .map((ix) => ix.version);
+    if (missing.length === indexes.length) return { error: `Unknown field "${name}"`, warnings };
+    if (missing.length)
+      warnings.push(
+        `"${name}" is not in version${missing.length > 1 ? 's' : ''} ${missing.join(', ')}; it reads as blank there`,
+      );
+  }
+  return { error: null, warnings };
 }

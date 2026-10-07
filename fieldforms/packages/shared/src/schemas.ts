@@ -164,10 +164,18 @@ export const settingsSchema = z.object({
   attendanceRetentionYears: z.number().int().min(3).max(50),
   privacyNoticeVersion: z.string().min(1).max(40),
   privacyNoticeText: z.string().min(1).max(20_000),
+  /** Who is emailed about failed deliveries; empty means every active admin with an email. */
+  deliveryAlertEmails: z.array(z.string().trim().toLowerCase().email().max(200)).max(20),
+  /** Branding for documents of submissions without a site (companies can set their own). */
+  brandName: z.string().trim().min(1).max(120),
+  brandColour: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'A colour like #1B365D'),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
 export const DEFAULT_SETTINGS: Settings = {
+  deliveryAlertEmails: [],
+  brandName: 'FieldForms',
+  brandColour: '#1B365D',
   clockSkewThresholdSeconds: 120,
   syncDelayFlagHours: 24,
   shiftGraceMinutes: 30,
