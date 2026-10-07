@@ -643,9 +643,60 @@ Attendance registers as a destination source; Excel templates; creating tasks th
 (`dispatches:write`); MySQL; Slack file uploads; inbound webhooks; personal Google accounts
 (Drive needs Google Workspace Shared Drives).
 
-## Later phases (summary)
+## Phase 4: dashboards
 
-- **Phase 4: dashboards.** A chart builder over form fields and a preset attendance dashboard.
+Office staff (admins and managers) build charts over form submissions and attendance, arrange
+them into saved dashboards, filter them by date and export them as PNG. A preset attendance
+dashboard comes built in. Dashboards are online only (they are office screens).
+
+### Charts
+
+- A chart is a JSON definition (zod schema in `packages/shared/src/dashboards.ts`):
+  - **type:** `bar`, `line`, `pie`, `number` (one big figure), `table` or `map`;
+  - **source:** a form, or `attendance` (the daily report rows);
+  - **period:** today, the last 7 or 30 days, this or last month, or a custom range, in SAST
+    (the dashboard's date filter overrides it unless the chart opts out);
+  - **filter:** an expression in the form language (form source; evaluated on each submission's
+    own version, missing fields blank), or sites and statuses (attendance);
+  - **group by:** a field (choice fields show their labels) or a reserved name (`_site`,
+    `_company`, `_region`, `_submitted_by`, and `_captured` by day, week or month), optionally
+    split into **series** by a second one;
+  - **measure:** a count, or the sum, average, minimum or maximum of a number field (a repeat
+    group column counts every row; `rowsFrom` groups by row fields); attendance measures are
+    hours worked, headcount (present or late), absent, late, missing IN and missing OUT;
+  - **table** columns (the latest submissions or the report rows) and **map** points (a geotag
+    field, or sites for attendance).
+- **Aggregation runs in the API, in Node**, over the submissions the user may see (as the
+  submissions list: admins all; managers their sites and their own tasks), using the same
+  runtime as everything else (`evaluateExpression`, display text). No SQL is built from a chart
+  definition. A query covers at most 50,000 submissions; beyond that it asks for a narrower
+  period. Results are cached for a minute per definition, period and user scope.
+- **Attendance** charts reuse the daily report (`dailyReport`) with the user's scope, and every
+  dashboard view that shows attendance writes one audit row (POPIA: who viewed attendance).
+
+### Dashboards
+
+- A dashboard has a name, an owner, a visibility (`private`, or `office`: every admin and
+  manager can open it, each seeing only data in their own scope), its charts in order with a
+  width (a third, half or full), and a date filter. Only the owner and admins edit it; changes
+  are audited; dashboards are archived, never deleted.
+- **Preset attendance dashboard** (read-only, can be copied): headcount per site today, hours per
+  employee this week, missing clock-outs in the last 7 days (a table), and late arrivals over the
+  last 30 days (a line).
+- **Rendering:** Recharts for bar, line, pie and number charts, a plain table, and Leaflet for
+  maps. The basemap is OpenStreetMap's tile server by default (with attribution, low volume, as
+  its usage policy asks), which needs the CSP to allow `https://tile.openstreetmap.org`; the
+  `mapTiles` setting can switch tiles off (points on a blank background), because loading tiles
+  tells the tile server which area is being looked at.
+- **Export:** each chart exports as PNG (drawn on a canvas from its SVG; maps with their tiles,
+  which OpenStreetMap serves with CORS) and its data as CSV.
+
+### Who can do what (Phase 4)
+
+| Action                                              | Admin | Manager                       | Supervisor |
+| --------------------------------------------------- | ----- | ----------------------------- | ---------- |
+| Build charts and dashboards; view office dashboards | yes   | yes (data in their own scope) |            |
+| Edit or archive a dashboard                         | all   | their own                     |            |
 
 ## Changes from the approved plan
 
