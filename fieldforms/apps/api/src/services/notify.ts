@@ -231,13 +231,27 @@ export async function deliverRegisterSummary(
   return 'sent';
 }
 
-/** Start and end registers from the app in the last week that have no delivery outcome yet. */
+/**
+ * Failed delivery attempts after which the sweeper stops re-enqueuing a register: three full
+ * pg-boss retry cycles (1 try + 8 retries each). The register then waits in the dead-letter queue.
+ */
+export const MAX_SWEEP_FAILURES = 27;
+
+/**
+ * Start and end registers from the app in the last week that still need an email: never attempted
+ * (the API failed to enqueue them), or failed more than an hour ago (the job's own retries are
+ * spent) and not yet given up on.
+ */
 export async function findUndelivered(db: Db): Promise<string[]> {
   const rows = await sql<{ id: string }>`
     SELECT r.id FROM register_submissions r
     WHERE r.kind IN ('start', 'end') AND r.source = 'app'
       AND r.server_received_at > now() - interval '7 days'
       AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.submission_id = r.id AND n.status IN ('sent', 'skipped'))
+      AND NOT EXISTS (SELECT 1 FROM notification_log n WHERE n.submission_id = r.id AND n.status = 'failed'
+                      AND n.created_at > now() - interval '1 hour')
+      AND (SELECT count(*) FROM notification_log n WHERE n.submission_id = r.id AND n.status = 'failed')
+          < ${MAX_SWEEP_FAILURES}
     LIMIT 500
   `.execute(db);
   return rows.rows.map((r) => r.id);
