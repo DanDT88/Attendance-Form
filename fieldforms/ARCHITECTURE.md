@@ -342,6 +342,10 @@ JavaScript objects: identifiers only resolve to form values, and functions come 
   a site, with a due date and pre-filled answers. The form version is fixed at dispatch time.
 - It appears in the assignee's inbox (offline too). For a group, whoever submits first completes
   it for everyone. Dispatches can be cancelled; they are never deleted.
+- A task for a site only reaches people whose scope covers that site, because nobody else could
+  submit it. Groups may span sites: members without access to the task's site do not see it and
+  are not emailed, and dispatching to a user (or a group with no member) who cannot see the site
+  is refused.
 - The worker emails each assignee who has an email address. Supervisors may now have an optional
   email for this; they still sign in with employee number and PIN.
 
@@ -370,5 +374,9 @@ JavaScript objects: identifiers only resolve to form values, and functions come 
 - Seed, legacy import and create-admin scripts live in `apps/api/src/scripts` so they ship in the
   API image.
 - Sync delay is measured on the device clock (see above).
+- Phase 2 does **not** re-express the attendance register as a form definition. The register
+  needs a per-site roster, replacements, shift-time maths, per-employee rows that managers correct
+  one by one, and its own report; as a generic form it would lose those or need special cases in
+  the form engine. Both share the outbox, sync engine, photo store and clock flags instead.
 
 See `TASKS.md` for the phased task list and status.

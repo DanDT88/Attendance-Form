@@ -12,6 +12,10 @@ platform and the legacy Google Apps Script attendance app at the root of this re
   reason and keeps the original.
 - **Admins** manage companies, regions, sites, shifts, employees, users, settings, POPIA requests
   and the audit log.
+- **Forms** (inspections, checklists, reports): admins build forms in the browser and publish
+  numbered versions. Anyone can fill them in on a phone, offline too, with calculations, show/hide
+  rules, photos with markup, signatures, barcode scanning and repeating rows. Managers send a form
+  as a pre-filled task to a person or a group, who get it in their inbox and by email.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and [TASKS.md](TASKS.md) for the roadmap.
 
@@ -36,6 +40,22 @@ These credentials are for local use only. Emails (register summaries with PDF) a
 
 To test offline behaviour in a desktop browser: sign in as a supervisor, open DevTools → Network,
 choose **Offline**, submit a register, then go back **Online** and watch the chip in the header.
+
+The demo data includes a **Site inspection** form, a **Cleaning products** list and a **Gauteng
+supervisors** group (S001 and S002). To try forms:
+
+- As a supervisor, open **Forms → Site inspection → Fill in**. The draft is saved on the phone as
+  you type; **Submit** puts it in the outbox.
+- As the admin, open **Admin → Forms** to edit the form (field list, properties, live preview,
+  problems found) and **Publish** a new version. Earlier submissions keep the version they were
+  filled in with. **Admin → Lists** takes option lists as CSV: a value and an optional label per row, with an
+  optional `value,label` header;
+  **Admin → Groups** manages who receives group tasks.
+- As a manager, use **Send as task** on the Forms page to dispatch a pre-filled form, **Tasks** to
+  follow it up, and **Submissions** to view what came in (photos, markup, signatures, JSON).
+  A task for a site only reaches people who can see that site.
+- Supervisors sign in with a PIN and need no email address; to email them their tasks, add an
+  optional email under **Admin → Users**.
 
 ## Development
 
@@ -132,6 +152,7 @@ with their work email; the first SSO sign-in links the account.
 ```
 apps/api        Fastify API, worker, migrations, seed and legacy importer (TypeScript)
 apps/web        React PWA with service worker and IndexedDB outbox; Playwright tests in e2e/
-packages/shared Schemas, shift-time and compliance maths, and the offline sync engine
+packages/shared Schemas, shift-time and compliance maths, the offline sync engine, the expression
+                language (src/expr) and the form definition schema and runtime (src/forms)
 docker/         Dockerfiles and nginx config
 ```
