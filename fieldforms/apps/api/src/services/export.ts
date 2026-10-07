@@ -18,7 +18,7 @@ export function toCsv(rows: DailyRow[]): string {
   const lines = [REPORT_COLUMNS.map(csvCell).join(',')];
   for (const r of reportTable(rows)) lines.push(r.map(csvCell).join(','));
   // BOM so Excel opens UTF-8 names correctly.
-  return '﻿' + lines.join('\r\n') + '\r\n';
+  return '\uFEFF' + lines.join('\r\n') + '\r\n';
 }
 
 export async function toXlsx(rows: DailyRow[], title: string): Promise<Buffer> {

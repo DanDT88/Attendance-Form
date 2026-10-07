@@ -46,7 +46,9 @@ async function report(query: string, cookie = mgr) {
 }
 
 describe('daily report', () => {
-  const [e1, e2, e3] = [0, 1, 2].map((i) => () => t.fx.employeesA[i]!);
+  const e1 = () => t.fx.employeesA[0]!;
+  const e2 = () => t.fx.employeesA[1]!;
+  const e3 = () => t.fx.employeesA[2]!;
 
   beforeAll(async () => {
     // 2026-09-01, day shift 07:00-16:00: e1 present all day, e2 late 30 min and left early at 14:00, e3 absent.
