@@ -603,7 +603,7 @@ copied onto another row does not open. `SECRETS_PRIVATE_KEY_PREVIOUS` allows a r
 script re-seals everything. The API reports only which secrets are set; saving without one keeps
 it (unless a binding field changed). Least-privilege setup is documented per kind (Graph
 `Sites.Selected`, a Google service account with only the target folder shared, an S3 key limited
-to one prefix, a SQL user with INSERT on one table).
+to one prefix, a SQL user with SELECT and INSERT on one table, plus UPDATE for upserts: the duplicate check reads the key).
 
 ### Public REST API
 
