@@ -161,11 +161,14 @@ Give each connection only what it needs, since FieldForms stores its credentials
   Drive needs a Google Workspace Shared Drive: service accounts cannot store files in My Drive.
 - **OneDrive / SharePoint:** an Entra app with the `Sites.Selected` application permission,
   granted on the target site only (not `Files.ReadWrite.All`).
-- **S3:** an access key allowed `s3:PutObject` and `s3:GetObject` on one bucket prefix.
+- **S3:** an access key allowed `s3:PutObject` and `s3:GetObject` on one bucket prefix (the
+  read lets a retry recognise a file it already uploaded). The connection check also needs
+  `s3:ListBucket` on the bucket; without it the check reports that, and deliveries still work.
 - **SQL:** a login with `INSERT`, `UPDATE` and `SELECT` on the one table, which needs a unique
   index on the key column. For systems inside your network, prefer pulling from the REST API
   (`docs/examples/sync-submissions.mjs`): it needs no inbound firewall rule.
-- **SFTP:** pin the server's host key (the check shows the fingerprint).
+- **SFTP:** pin the server's host key (the check shows the fingerprint). A destination folder
+  starting with `/` is absolute; otherwise it is relative to the login's home folder.
 
 ### Single sign-on (managers and admins)
 
