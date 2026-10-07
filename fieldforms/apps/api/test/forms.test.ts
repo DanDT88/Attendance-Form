@@ -2,7 +2,9 @@ import { SITE_INSPECTION, type FormDefinition } from '@fieldforms/shared';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { dispatchRecipients } from '../src/services/dispatch.js';
 import { parseCsvItems } from '../src/services/forms.js';
+import { deliverDispatchEmail, findUnnotifiedDispatches } from '../src/services/notify.js';
 import { createTestContext, fakeJpeg, H, login, type TestContext } from './helpers.js';
 
 let t: TestContext;
@@ -432,5 +434,102 @@ describe('dispatch', () => {
     expect((await req('POST', `/api/dispatches/${d.id}/cancel`, mgr)).statusCode).toBe(200);
     expect((await req('GET', '/api/inbox', sup)).json()).toEqual([]);
     expect((await req('POST', `/api/dispatches/${d.id}/cancel`, mgr)).statusCode).toBe(400);
+  });
+});
+
+describe('dispatch emails', () => {
+  const recording = () => {
+    const sent: { to: string[]; subject: string; html: string }[] = [];
+    return {
+      sent,
+      mailer: {
+        send: async (m: { to: string[]; subject: string; html: string }) => void sent.push(m),
+      },
+    };
+  };
+  const recipientsOf = (id: string) => dispatchRecipients(t.db, id);
+
+  it('emails the assignee once, using their optional supervisor email', async () => {
+    expect(
+      (
+        await req('PATCH', `/api/admin/users/${t.fx.users.supervisor}`, admin, {
+          email: 'Sam@Site-A.test',
+        })
+      ).statusCode,
+    ).toBe(200);
+    const d = (
+      await req('POST', '/api/dispatches', mgr, {
+        formId,
+        title: 'Check <the> bins',
+        siteId: t.fx.siteA,
+        assignedUserId: t.fx.users.supervisor,
+        dueOn: '2026-10-10',
+      })
+    ).json();
+    expect(await findUnnotifiedDispatches(t.db)).toContain(d.id);
+
+    const m = recording();
+    expect(
+      await deliverDispatchEmail(t.db, m.mailer as never, d.id, 'https://ff.example', recipientsOf),
+    ).toBe('sent');
+    expect(
+      await deliverDispatchEmail(t.db, m.mailer as never, d.id, 'https://ff.example', recipientsOf),
+    ).toBe('already-sent');
+    expect(m.sent).toHaveLength(1);
+    expect(m.sent[0]).toMatchObject({
+      to: ['sam@site-a.test'],
+      subject: 'New task: Check <the> bins',
+    });
+    expect(m.sent[0]!.html).toContain('Check &lt;the&gt; bins');
+    expect(m.sent[0]!.html).toContain('https://ff.example/forms');
+    expect(await findUnnotifiedDispatches(t.db)).not.toContain(d.id);
+  });
+
+  it('records a skip when nobody can be emailed, or the task was cancelled first', async () => {
+    const g = (
+      await req('POST', '/api/admin/groups', admin, {
+        name: 'No email team',
+        memberIds: [t.fx.users.supervisorB],
+      })
+    ).json();
+    const d1 = (
+      await req('POST', '/api/dispatches', admin, {
+        formId,
+        title: 'A',
+        siteId: t.fx.siteB,
+        assignedGroupId: g.id,
+      })
+    ).json();
+    const m = recording();
+    expect(
+      await deliverDispatchEmail(
+        t.db,
+        m.mailer as never,
+        d1.id,
+        'https://ff.example',
+        recipientsOf,
+      ),
+    ).toBe('skipped');
+
+    const d2 = (
+      await req('POST', '/api/dispatches', admin, {
+        formId,
+        title: 'B',
+        siteId: t.fx.siteA,
+        assignedUserId: t.fx.users.supervisor,
+      })
+    ).json();
+    await req('POST', `/api/dispatches/${d2.id}/cancel`, admin);
+    expect(
+      await deliverDispatchEmail(
+        t.db,
+        m.mailer as never,
+        d2.id,
+        'https://ff.example',
+        recipientsOf,
+      ),
+    ).toBe('skipped');
+    expect(m.sent).toHaveLength(0);
+    expect(await findUnnotifiedDispatches(t.db)).not.toContain(d1.id);
   });
 });

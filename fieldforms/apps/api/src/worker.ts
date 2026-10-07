@@ -3,10 +3,13 @@ import { z } from 'zod';
 import { loadConfig } from './config.js';
 import { createDb } from './db/index.js';
 import { createBlobStore } from './lib/blobstore.js';
-import { bossQueue, createBoss, ensureQueue, REGISTER_NOTIFY } from './queue.js';
+import { bossQueue, createBoss, DISPATCH_NOTIFY, ensureQueue, REGISTER_NOTIFY } from './queue.js';
+import { dispatchRecipients } from './services/dispatch.js';
 import {
+  deliverDispatchEmail,
   deliverRegisterSummary,
   findUndelivered,
+  findUnnotifiedDispatches,
   gotenbergRenderer,
   type Mailer,
 } from './services/notify.js';
@@ -59,13 +62,28 @@ await boss.work<{ submissionId: string }>(REGISTER_NOTIFY, async ([job]) => {
   console.log(`[worker] ${REGISTER_NOTIFY} ${job.data.submissionId}: ${outcome}`);
 });
 
+await boss.work<{ dispatchId: string }>(DISPATCH_NOTIFY, async ([job]) => {
+  if (!job) return;
+  const outcome = await deliverDispatchEmail(
+    db,
+    mailer,
+    job.data.dispatchId,
+    cfg.PUBLIC_URL,
+    (id) => dispatchRecipients(db, id),
+  );
+  console.log(`[worker] ${DISPATCH_NOTIFY} ${job.data.dispatchId}: ${outcome}`);
+});
+
 const SWEEP = 'register-notify-sweep';
 await ensureQueue(boss, SWEEP);
 await boss.schedule(SWEEP, '*/10 * * * *');
 await boss.work(SWEEP, async () => {
   const ids = await findUndelivered(db);
   for (const id of ids) await queue.enqueueRegisterNotify(id);
-  if (ids.length) console.log(`[worker] sweep re-enqueued ${ids.length}`);
+  const tasks = await findUnnotifiedDispatches(db);
+  for (const id of tasks) await queue.enqueueDispatchNotify(id);
+  if (ids.length + tasks.length)
+    console.log(`[worker] sweep re-enqueued ${ids.length} registers, ${tasks.length} tasks`);
 });
 
 console.log('[worker] started');
