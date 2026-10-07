@@ -9,6 +9,8 @@ export default defineConfig({
     seed: 'src/scripts/seed.ts',
     'import-legacy': 'src/scripts/import-legacy.ts',
     'create-admin': 'src/scripts/create-admin.ts',
+    'secrets-keygen': 'src/scripts/secrets-keygen.ts',
+    'rotate-secrets': 'src/scripts/rotate-secrets.ts',
   },
   format: 'esm',
   platform: 'node',

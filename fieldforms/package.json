@@ -20,7 +20,9 @@
     "dev:api": "pnpm --filter @fieldforms/api run dev",
     "dev:web": "pnpm --filter @fieldforms/web run dev",
     "dev:worker": "pnpm --filter @fieldforms/worker run dev",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "secrets-keygen": "pnpm --filter @fieldforms/api secrets-keygen",
+    "rotate-secrets": "pnpm --filter @fieldforms/api rotate-secrets"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

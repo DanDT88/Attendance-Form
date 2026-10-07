@@ -27,6 +27,14 @@ x-api-env: &api-env
   OIDC_GOOGLE_CLIENT_ID: ${OIDC_GOOGLE_CLIENT_ID:-}
   OIDC_GOOGLE_CLIENT_SECRET: ${OIDC_GOOGLE_CLIENT_SECRET:-}
   OIDC_GOOGLE_LABEL: Google Workspace
+  # Phase 3: documents and destinations.
+  GOTENBERG_URL: http://gotenberg:3000
+  GOTENBERG_USERNAME: ${GOTENBERG_USERNAME:-fieldforms}
+  GOTENBERG_PASSWORD: ${GOTENBERG_PASSWORD:-dev-gotenberg-password}
+  # Private ranges destinations may reach (e.g. an on-premises SFTP server). Empty: public only.
+  DESTINATIONS_ALLOWED_PRIVATE_CIDRS: ${DESTINATIONS_ALLOWED_PRIVATE_CIDRS:-}
+  DESTINATIONS_ALLOW_SAME_NETWORK: ${DESTINATIONS_ALLOW_SAME_NETWORK:-false}
+  API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-120}
 
 services:
   postgres:
@@ -47,8 +55,23 @@ services:
     image: axllent/mailpit:latest
     ports: ['127.0.0.1:8025:8025']
 
+  # HTML and Word → PDF. On an internal network with no route out, behind basic auth, with
+  # JavaScript off and Chromium refused every network address: a template cannot make it fetch
+  # anything (ARCHITECTURE.md, "Renderer isolation").
   gotenberg:
     image: gotenberg/gotenberg:8
+    command:
+      - gotenberg
+      - --api-enable-basic-auth
+      - --api-disable-download-from
+      - --webhook-disable
+      - --chromium-disable-javascript=true
+      - --chromium-deny-private-ips=true
+      - --chromium-deny-public-ips=true
+    environment:
+      GOTENBERG_API_BASIC_AUTH_USERNAME: ${GOTENBERG_USERNAME:-fieldforms}
+      GOTENBERG_API_BASIC_AUTH_PASSWORD: ${GOTENBERG_PASSWORD:-dev-gotenberg-password}
+    networks: [render]
 
   # One-shot: applies migrations as the database owner and sets the app role's password.
   migrate:
@@ -87,7 +110,12 @@ services:
   api:
     image: fieldforms-api
     pull_policy: never # built by the migrate service
-    environment: *api-env
+    environment:
+      <<: *api-env
+      # Seals destination secrets; the API can never open them. Development key pair only: run
+      # `pnpm secrets-keygen` for production and give the private key to the worker alone.
+      SECRETS_PUBLIC_KEY: ${SECRETS_PUBLIC_KEY:-MCowBQYDK2VuAyEA4YBdTjibsqoLUzl8VjCGa7Bp7xXcg/Y/xoBVwqH7N2A=}
+    networks: [default, render]
     volumes: [blobs:/data/blobs]
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -107,11 +135,19 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-FieldForms <fieldforms@localhost>}
-      GOTENBERG_URL: http://gotenberg:3000
+      # Mailpit has no STARTTLS; production mail servers must (the default is true).
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-false}
+      SECRETS_PRIVATE_KEY: ${SECRETS_PRIVATE_KEY:-MC4CAQAwBQYDK2VuBCIEIGi69oAqtkd6OJ3NfwFp/UOR/GPrbBV7P+pAj3p1gqN5}
+      SECRETS_PRIVATE_KEY_PREVIOUS: ${SECRETS_PRIVATE_KEY_PREVIOUS:-}
+      DELIVERY_CONCURRENCY: ${DELIVERY_CONCURRENCY:-4}
+      EMAIL_ATTACHMENT_LIMIT_MB: ${EMAIL_ATTACHMENT_LIMIT_MB:-10}
+    networks: [default, render]
     volumes: [blobs:/data/blobs]
     depends_on:
       migrate: { condition: service_completed_successfully }
     restart: unless-stopped
+    # Longer than the worker's graceful stop (20 s), so a deploy does not kill jobs mid-send.
+    stop_grace_period: 30s
 
   web:
     build: { context: ., dockerfile: docker/web.Dockerfile }
@@ -120,6 +156,12 @@ services:
     ports: ['${WEB_PORT:-8080}:8080']
     depends_on: [api]
     restart: unless-stopped
+
+networks:
+  default:
+  # Only the API and the worker reach Gotenberg; it reaches nothing.
+  render:
+    internal: true
 
 volumes:
   pgdata:
