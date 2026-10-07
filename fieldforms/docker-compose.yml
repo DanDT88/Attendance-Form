@@ -68,6 +68,8 @@ services:
       - --chromium-disable-javascript=true
       - --chromium-deny-private-ips=true
       - --chromium-deny-public-ips=true
+      - --libreoffice-deny-private-ips=true
+      - --libreoffice-deny-public-ips=true
     environment:
       GOTENBERG_API_BASIC_AUTH_USERNAME: ${GOTENBERG_USERNAME:-fieldforms}
       GOTENBERG_API_BASIC_AUTH_PASSWORD: ${GOTENBERG_PASSWORD:-dev-gotenberg-password}

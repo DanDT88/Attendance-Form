@@ -18,6 +18,8 @@ FROM node:22-alpine
 ENV NODE_ENV=production MIGRATIONS_DIR=/app/migrations
 WORKDIR /app
 COPY --from=build /out /app
+# A font, so text drawn into images (sample placeholders for test sends) renders.
+RUN apk add --no-cache fontconfig font-dejavu
 # Owned by node so a fresh named volume mounted here is writable.
 RUN mkdir -p /data/blobs && chown node:node /data/blobs
 USER node
