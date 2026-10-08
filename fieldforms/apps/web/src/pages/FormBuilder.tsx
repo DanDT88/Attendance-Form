@@ -309,6 +309,9 @@ export function FormEditor() {
             <Link to={`/admin/forms/${id}/destinations`} data-testid="form-destinations">
               Destinations
             </Link>
+            <Link to={`/admin/forms/${id}/documents`} data-testid="form-documents-link">
+              Documents
+            </Link>
           </span>
           <span className="small muted">
             {loaded.data!.versions.length

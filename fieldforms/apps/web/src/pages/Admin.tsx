@@ -5,6 +5,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from '../lib/api';
 import { ConnectionsAdmin } from './Connections';
 import { DestinationsAdmin } from './Destinations';
+import { FormDocuments, TemplatesAdmin } from './Templates';
 import { FormEditor, FormsAdmin, GroupsAdmin, ListsAdmin } from './FormBuilder';
 
 /* Admin screens: deliberately plain forms and tables. Nothing is ever hard-deleted; "Deactivate" hides it. */
@@ -111,6 +112,7 @@ export function AdminPage() {
         <NavLink to="employees">Employees</NavLink>
         <NavLink to="users">Users</NavLink>
         <NavLink to="connections">Connections</NavLink>
+        <NavLink to="templates">Templates</NavLink>
         <NavLink to="settings">Settings</NavLink>
         <NavLink to="privacy">Privacy</NavLink>
         <NavLink to="audit">Audit log</NavLink>
@@ -120,6 +122,8 @@ export function AdminPage() {
         <Route path="forms" element={<FormsAdmin />} />
         <Route path="forms/:id" element={<FormEditor />} />
         <Route path="forms/:id/destinations" element={<DestinationsAdmin />} />
+        <Route path="forms/:id/documents" element={<FormDocuments />} />
+        <Route path="templates" element={<TemplatesAdmin />} />
         <Route path="lists" element={<ListsAdmin />} />
         <Route path="groups" element={<GroupsAdmin />} />
         <Route path="org" element={<OrgAdmin />} />
