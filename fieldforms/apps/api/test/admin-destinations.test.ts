@@ -335,7 +335,6 @@ describe('saving destinations', () => {
       table: 'inspections',
       keyColumn: 'id',
       columns: [
-        { column: 'id', source: { type: 'expression', expression: '_id' } },
         { column: 'area', source: { type: 'field', field: 'area' } },
         { column: 'severity', source: { type: 'field', field: 'severity' } },
         { column: 'big', source: { type: 'expression', expression: 'litres > 10' } },
@@ -348,7 +347,7 @@ describe('saving destinations', () => {
 
     const bad = await sql({
       table: 'inspections',
-      keyColumn: 'nope',
+      keyColumn: 'id',
       columns: [
         { column: 'id', source: { type: 'field', field: '_id' } },
         { column: 'x', source: { type: 'expression', expression: 'missing + 1' } },
@@ -360,7 +359,7 @@ describe('saving destinations', () => {
       'Column "id": "_id" is not a field; use an expression for reserved names',
       'Column "x": Unknown field "missing"',
       'Column "x" is mapped twice',
-      'Key column: "nope" is not one of the mapped columns',
+      'Key column: "id" is filled with the submission id, so it cannot also be mapped',
     ]);
 
     // One row per group row: siblings resolve inside the row.
@@ -369,7 +368,6 @@ describe('saving destinations', () => {
       keyColumn: 'id',
       rowsFrom: 'items',
       columns: [
-        { column: 'id', source: { type: 'expression', expression: '_id' } },
         { column: 'qty', source: { type: 'field', field: 'qty' } },
         { column: 'note', source: { type: 'field', field: 'items.note' } },
         { column: 'double', source: { type: 'expression', expression: 'qty * 2' } },
@@ -380,7 +378,7 @@ describe('saving destinations', () => {
       table: 'x',
       keyColumn: 'id',
       rowsFrom: 'area',
-      columns: [{ column: 'id', source: { type: 'expression', expression: '_id' } }],
+      columns: [{ column: 'area', source: { type: 'field', field: 'area' } }],
     });
     expect(notGroup.json().details).toEqual(['Rows from: "area" is not a repeating group']);
 

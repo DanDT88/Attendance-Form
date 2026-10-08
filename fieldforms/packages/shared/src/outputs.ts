@@ -342,7 +342,7 @@ export const destinationSettingsSchemas = {
       .array(z.object({ column: sqlName, source: mappingSource }))
       .min(1)
       .max(100),
-    /** The column mapped from `_id` (or `_id` plus the row number with rowsFrom); needs a unique index. */
+    /** Filled by FieldForms with `_id` (plus the row number with rowsFrom), never mapped; needs a unique index. */
     keyColumn: sqlName,
     /** `insert` leaves an existing row alone (a resend changes nothing); `upsert` updates it. */
     mode: z.enum(['insert', 'upsert']).default('insert'),

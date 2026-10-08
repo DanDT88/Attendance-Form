@@ -282,8 +282,11 @@ async function check(
       if (c.source.type === 'field') fieldRef(label, c.source.field, rowsFrom);
       else expression(label, c.source.expression, rowsFrom);
     }
-    if (d.kind === 'sql' && !columns.some((c) => c.column === settings.keyColumn))
-      errors.push(`Key column: "${String(settings.keyColumn)}" is not one of the mapped columns`);
+    // The adapter fills the key column itself (the submission id, plus the row number).
+    if (d.kind === 'sql' && columns.some((c) => c.column === settings.keyColumn))
+      errors.push(
+        `Key column: "${String(settings.keyColumn)}" is filled with the submission id, so it cannot also be mapped`,
+      );
 
     if (d.kind === 'email') {
       const r = settings.recipients as { fields: string[] };
