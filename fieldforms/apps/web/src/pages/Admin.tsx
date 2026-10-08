@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from '../lib/api';
+import { ApiKeysAdmin } from './ApiKeys';
 import { ConnectionsAdmin } from './Connections';
 import { DestinationsAdmin } from './Destinations';
 import { FormDocuments, TemplatesAdmin } from './Templates';
@@ -113,6 +114,7 @@ export function AdminPage() {
         <NavLink to="users">Users</NavLink>
         <NavLink to="connections">Connections</NavLink>
         <NavLink to="templates">Templates</NavLink>
+        <NavLink to="api-keys">API keys</NavLink>
         <NavLink to="settings">Settings</NavLink>
         <NavLink to="privacy">Privacy</NavLink>
         <NavLink to="audit">Audit log</NavLink>
@@ -124,6 +126,7 @@ export function AdminPage() {
         <Route path="forms/:id/destinations" element={<DestinationsAdmin />} />
         <Route path="forms/:id/documents" element={<FormDocuments />} />
         <Route path="templates" element={<TemplatesAdmin />} />
+        <Route path="api-keys" element={<ApiKeysAdmin />} />
         <Route path="lists" element={<ListsAdmin />} />
         <Route path="groups" element={<GroupsAdmin />} />
         <Route path="org" element={<OrgAdmin />} />
