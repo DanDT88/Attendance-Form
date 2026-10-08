@@ -1,7 +1,11 @@
 import type { FormDefinition } from '@fieldforms/shared';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { backfillDeliveries, cancelPendingDeliveries } from '../src/services/deliveries.js';
+import {
+  backfillDeliveries,
+  cancelPendingDeliveries,
+  resendDeliveries,
+} from '../src/services/deliveries.js';
 import { createTestContext, H, login, type TestContext } from './helpers.js';
 
 let t: TestContext;
@@ -147,6 +151,71 @@ describe('backfill and cancel', () => {
       ignoreCondition: false,
     });
     expect(r).toEqual({ created: 2, skipped: 0, existing: 0 });
+  });
+
+  it('reads a field that is only in the draft as blank, as the save check does', async () => {
+    await t.owner
+      .updateTable('forms')
+      .set({
+        draft_definition: JSON.stringify({
+          ...def,
+          fields: [...def.fields, { id: 'urgent', type: 'text', label: 'Urgent' }],
+        }),
+      })
+      .where('id', '=', formId)
+      .execute();
+    const id = await destination('urgent = "yes"');
+    await backfillDeliveries(t.db, queueOf(t), {
+      destinationId: id,
+      submissionIds: subs,
+      triggeredBy: t.fx.users.admin,
+      ignoreCondition: false,
+    });
+    const rows = await t.owner
+      .selectFrom('deliveries')
+      .select(['status'])
+      .where('destination_id', '=', id)
+      .execute();
+    expect(rows.map((r) => r.status)).toEqual(['skipped', 'skipped']);
+  });
+
+  it('re-checks the condition when resending a delivery whose condition failed', async () => {
+    const id = await destination('nonsense_field > 1');
+    await backfillDeliveries(t.db, queueOf(t), {
+      destinationId: id,
+      submissionIds: subs,
+      triggeredBy: t.fx.users.admin,
+      ignoreCondition: false,
+    });
+    const rows = async () =>
+      new Map(
+        (
+          await t.owner
+            .selectFrom('deliveries')
+            .select(['id', 'submission_id', 'status', 'last_error_class'])
+            .where('destination_id', '=', id)
+            .execute()
+        ).map((r) => [r.submission_id, r]),
+      );
+    const ids = [...(await rows()).values()].map((r) => r.id);
+    const resend = () =>
+      t.db.transaction().execute((trx) => resendDeliveries(trx, queueOf(t), ids));
+
+    // Still an error: nothing is sent.
+    expect((await resend()).resent).toEqual([]);
+
+    // Fixed to a condition true for one submission: only that one is sent; the other is skipped.
+    await t.owner
+      .updateTable('destinations')
+      .set({ condition: 'litres > 10' })
+      .where('id', '=', id)
+      .execute();
+    const r = await resend();
+    const after = await rows();
+    expect(r.resent).toEqual([after.get(subs[1]!)!.id]);
+    expect(after.get(subs[1]!)!.status).toBe('pending');
+    expect(after.get(subs[0]!)).toMatchObject({ status: 'skipped', last_error_class: null });
+    expect(r.skipped).toEqual([{ id: after.get(subs[0]!)!.id, reason: 'The condition is false' }]);
   });
 
   it('cancels pending deliveries with an attempt row each', async () => {

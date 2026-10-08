@@ -7,6 +7,7 @@ import {
   expr,
   type Answers,
   type FormDefinition,
+  validateDefinition,
 } from '@fieldforms/shared';
 import { sql } from 'kysely';
 import type { Db } from '../db/index.js';
@@ -107,6 +108,34 @@ export async function formVersions(db: Db, formId: string) {
 }
 
 /**
+ * Every published version of the form, plus the draft when it is valid (as the version it would
+ * become), so a condition can use a field that is about to be published. Saving checks names
+ * against these, and conditions and mappings read a field only in the draft as blank.
+ */
+export async function versionsToCheck(db: Db, formId: string) {
+  const versions = await formVersions(db, formId);
+  const form = await db
+    .selectFrom('forms')
+    .select('draft_definition')
+    .where('id', '=', formId)
+    .executeTakeFirst();
+  const lists = await db
+    .selectFrom('option_lists')
+    .select('id')
+    .where('archived_at', 'is', null)
+    .execute();
+  const draft = validateDefinition(form?.draft_definition, {
+    listIds: new Set(lists.map((l) => l.id)),
+  });
+  if (draft.ok && draft.definition)
+    versions.push({
+      version: (versions.at(-1)?.version ?? 0) + 1,
+      definition: draft.definition,
+    });
+  return versions;
+}
+
+/**
  * Evaluates a destination's condition on a stored submission, with the submission's own version
  * and `now` as when it was filled in (if the device clock was plausible).
  */
@@ -169,7 +198,7 @@ async function insertDeliveries(
   opts: { ignoreCondition: boolean; triggeredBy: string | null },
 ): Promise<{ created: number; skipped: number; existing: number }> {
   const knownIds = fieldKeysOf(
-    (await formVersions(trx, destination.formId)).map((v) => v.definition),
+    (await versionsToCheck(trx, destination.formId)).map((v) => v.definition),
   );
   let created = 0;
   let skipped = 0;
@@ -348,8 +377,10 @@ export async function planDeliveries(
 /**
  * Starts a new generation for finished deliveries (delivered, failed, skipped or cancelled):
  * a new idempotency key, the destination's current settings and templates, a fresh target. A
- * skipped delivery is sent only if its condition is now true (or `ignoreCondition`). Runs in
- * the caller's transaction and enqueues there.
+ * delivery its condition kept back (skipped, or failed because the condition could not be
+ * evaluated) is sent only if the condition is now true (or `ignoreCondition`); a failed one whose
+ * condition now works and is false becomes skipped. Runs in the caller's transaction and
+ * enqueues there.
  */
 export async function resendDeliveries(
   trx: Db,
@@ -367,6 +398,8 @@ export async function resendDeliveries(
         .select([
           'dl.id',
           'dl.status',
+          'dl.generation',
+          'dl.last_error_class',
           'dl.submission_id',
           'd.condition',
           'd.form_id',
@@ -389,16 +422,47 @@ export async function resendDeliveries(
       skipped.push({ id: r.id, reason: 'The destination is switched off' });
       continue;
     }
-    if (r.status === 'skipped' && !opts.ignoreCondition) {
+    // A delivery the condition kept back (false, or an error) is sent only if it now holds.
+    const heldBack =
+      r.status === 'skipped' || (r.status === 'failed' && r.last_error_class === 'condition');
+    if (heldBack && !opts.ignoreCondition) {
       const facts = (await submissionFacts(trx, [r.submission_id])).get(r.submission_id);
-      const known = fieldKeysOf((await formVersions(trx, r.form_id)).map((v) => v.definition));
+      const known = fieldKeysOf((await versionsToCheck(trx, r.form_id)).map((v) => v.definition));
       const c = facts
         ? evaluateCondition(r.condition, facts, known, r.form_name)
         : { use: false, error: 'missing' };
+      if (c.error) {
+        skipped.push({ id: r.id, reason: 'The condition could not be evaluated' });
+        continue;
+      }
       if (!c.use) {
+        if (r.status === 'failed') {
+          // The condition works now and is false: the delivery is skipped, not failed.
+          await trx
+            .updateTable('deliveries')
+            .set({
+              status: 'skipped',
+              last_error: null,
+              last_error_class: null,
+              updated_at: sql`now()`,
+            })
+            .where('id', '=', r.id)
+            .execute();
+          await trx
+            .insertInto('delivery_attempts')
+            .values({
+              delivery_id: r.id,
+              generation: r.generation,
+              attempt_no: 0,
+              outcome: 'skipped',
+              detail: 'The condition was false',
+              started_at: new Date(),
+            })
+            .execute();
+        }
         skipped.push({
           id: r.id,
-          reason: c.error ? 'The condition could not be evaluated' : 'The condition is still false',
+          reason: r.status === 'failed' ? 'The condition is false' : 'The condition is still false',
         });
         continue;
       }

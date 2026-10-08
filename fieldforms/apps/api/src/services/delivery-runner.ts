@@ -39,6 +39,7 @@ import { NetworkPolicyError, type NetworkPolicy } from '../lib/netguard.js';
 import { SecretsError, type SecretOpener } from '../lib/secrets.js';
 import type { PdfConverter, RenderedFile, TemplateRef } from '../outputs/types.js';
 import type * as documents from './documents.js';
+import { versionsToCheck } from './deliveries.js';
 import type { JobQueue } from './registers.js';
 
 /**
@@ -324,7 +325,6 @@ async function prepare(
   // The model: a real submission, or a sample for a test send.
   let model: DocumentModel;
   let definition: FormDefinition;
-  let versions: { version: number; definition: FormDefinition }[];
   let who = {
     siteId: null as string | null,
     submittedBy: null as string | null,
@@ -344,7 +344,6 @@ async function prepare(
       });
     model = loaded.model;
     definition = loaded.definition;
-    versions = loaded.versions;
     who = { siteId: loaded.siteId, submittedBy: loaded.submittedBy, dispatchId: loaded.dispatchId };
   } else {
     const v = await db
@@ -354,7 +353,6 @@ async function prepare(
       .orderBy('version', 'desc')
       .executeTakeFirstOrThrow();
     definition = v.definition as typeof definition;
-    versions = [{ version: v.version, definition }];
     model = deps.documents.sampleSubmission(
       definition,
       { id: d.form_id, name: d.form_name, version: v.version, versionId: v.id },
@@ -403,7 +401,8 @@ async function prepare(
     files.push(...r.files);
   }
 
-  const knownIds = fieldKeysOf(versions.map((v) => v.definition));
+  // Names only in the draft read as blank, as the save check allows them.
+  const knownIds = fieldKeysOf((await versionsToCheck(db, d.form_id)).map((v) => v.definition));
   // Expressions see "today" as when the form was filled in, if the device clock was plausible,
   // exactly as when the submission was stored.
   const received = new Date(model.submission.receivedAt);

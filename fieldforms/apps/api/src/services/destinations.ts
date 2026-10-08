@@ -15,7 +15,6 @@ import {
   KIND_FORMATS,
   RESERVED_NAMES,
   uuid,
-  validateDefinition,
   type DestinationInclude,
   type DestinationKind,
   type Format,
@@ -33,8 +32,8 @@ import { canonical } from './connections.js';
 import {
   backfillDeliveries,
   cancelPendingDeliveries,
-  formVersions,
   resendDeliveries,
+  versionsToCheck,
 } from './deliveries.js';
 import type { JobQueue } from './registers.js';
 import { templateProblems } from './templates.js';
@@ -121,33 +120,6 @@ export function carriesPersonalData(i: DestinationInclude): boolean {
     i.fields === 'all' ||
     i.fields.length > 0
   );
-}
-
-/**
- * Every published version of the form, plus the draft when it is valid (as the version it would
- * become), so a condition can use a field that is about to be published.
- */
-async function versionsToCheck(db: Db, formId: string) {
-  const versions = await formVersions(db, formId);
-  const form = await db
-    .selectFrom('forms')
-    .select('draft_definition')
-    .where('id', '=', formId)
-    .executeTakeFirst();
-  const lists = await db
-    .selectFrom('option_lists')
-    .select('id')
-    .where('archived_at', 'is', null)
-    .execute();
-  const draft = validateDefinition(form?.draft_definition, {
-    listIds: new Set(lists.map((l) => l.id)),
-  });
-  if (draft.ok && draft.definition)
-    versions.push({
-      version: (versions.at(-1)?.version ?? 0) + 1,
-      definition: draft.definition,
-    });
-  return versions;
 }
 
 /** Liquid settings, checked like templates: syntax, and every name against the form. */
