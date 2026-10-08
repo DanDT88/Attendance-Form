@@ -46,8 +46,13 @@ services:
     volumes: [pgdata:/var/lib/postgresql/data]
     ports: ['127.0.0.1:5432:5432']
     healthcheck:
+      # Over TCP: on a first start the image's set-up server answers on the socket only, before
+      # Postgres listens on the network, and migrations would start too early.
       test:
-        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-fieldforms} -d ${POSTGRES_DB:-fieldforms}']
+        [
+          'CMD-SHELL',
+          'pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-fieldforms} -d ${POSTGRES_DB:-fieldforms}',
+        ]
       interval: 5s
       retries: 20
 
