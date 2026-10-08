@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from '../lib/api';
+import { ConnectionsAdmin } from './Connections';
 import { FormEditor, FormsAdmin, GroupsAdmin, ListsAdmin } from './FormBuilder';
 
 /* Admin screens: deliberately plain forms and tables. Nothing is ever hard-deleted; "Deactivate" hides it. */
@@ -108,6 +109,7 @@ export function AdminPage() {
         <NavLink to="org">Sites</NavLink>
         <NavLink to="employees">Employees</NavLink>
         <NavLink to="users">Users</NavLink>
+        <NavLink to="connections">Connections</NavLink>
         <NavLink to="settings">Settings</NavLink>
         <NavLink to="privacy">Privacy</NavLink>
         <NavLink to="audit">Audit log</NavLink>
@@ -121,6 +123,7 @@ export function AdminPage() {
         <Route path="org" element={<OrgAdmin />} />
         <Route path="employees" element={<EmployeesAdmin />} />
         <Route path="users" element={<UsersAdmin />} />
+        <Route path="connections" element={<ConnectionsAdmin />} />
         <Route path="settings" element={<SettingsAdmin />} />
         <Route path="privacy" element={<PrivacyAdmin />} />
         <Route path="audit" element={<AuditAdmin />} />
