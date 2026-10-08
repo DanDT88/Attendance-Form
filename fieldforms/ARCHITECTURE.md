@@ -600,10 +600,12 @@ Secrets are **sealed to the worker**: the internet-facing API holds only an X255
 worker holds the private key (`SECRETS_PRIVATE_KEY`). Each value is sealed with an ephemeral
 key (ECDH, HKDF-SHA256, AES-256-GCM) and bound to its row as associated data, so a sealed value
 copied onto another row does not open. `SECRETS_PRIVATE_KEY_PREVIOUS` allows a rotation and a
-script re-seals everything. The API reports only which secrets are set; saving without one keeps
-it (unless a binding field changed). Least-privilege setup is documented per kind (Graph
-`Sites.Selected`, a Google service account with only the target folder shared, an S3 key limited
-to one prefix, a SQL user with INSERT on one table).
+script re-seals everything. The API reports only which secrets are set; saving without secrets keeps
+them (unless a binding field changed), and saving with any secret replaces the whole set, because
+the API cannot open the sealed record to merge into it. Least-privilege setup is documented per
+kind (Graph `Sites.Selected`, a Google service account with only the target folder shared, an S3
+key limited to one prefix, a SQL user with SELECT and INSERT on one table, plus UPDATE for
+upserts: the duplicate check reads the key).
 
 ### Public REST API
 

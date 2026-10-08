@@ -9,15 +9,20 @@ Types and schemas are in `packages/shared/src/outputs.ts`.
 
 ## Connections (admin)
 
-| Route                                   | Body / query                                                                                                          | Returns                                                                                                                                        |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/admin/connections`            | `?kind=`                                                                                                              | `[{ id, name, kind, config, secretKeys, secretExpiresOn, lastCheck: { at, ok, detail } \| null, destinations: number, archivedAt }]`           |
-| `POST /api/admin/connections`           | `{ name, kind, config, secrets: { [key]: string }, secretExpiresOn? }`                                                | `201 { id, generated?: { signingSecret } }` (a webhook signing secret left empty is generated and shown once)                                  |
-| `GET /api/admin/connections/:id`        |                                                                                                                       | the list row plus `revisions: [{ revision, createdAt, createdBy, secretsReset }]`                                                              |
-| `PATCH /api/admin/connections/:id`      | `{ name?, config?, secrets?, secretExpiresOn?, archived? }`. A secret key with `""` clears it; omitted keys are kept. | `{ secretsReset: boolean }` (true when a binding field changed: all secrets were cleared and must be re-entered)                               |
-| `POST /api/admin/connections/:id/check` | `{}`                                                                                                                  | `202 { testId }`                                                                                                                               |
-| `POST /api/admin/connection-checks`     | `{ kind, config, secrets }` (unsaved; secrets sealed to the test row)                                                 | `202 { testId }`                                                                                                                               |
-| `GET /api/admin/tests/:id`              |                                                                                                                       | `{ id, kind, status: queued\|running\|ok\|failed, result: { summary, facts?, warnings?, target?, evidence? } \| null, createdAt, finishedAt }` |
+| Route                                   | Body / query                                                                                                                                                      | Returns                                                                                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/admin/connections`            | `?kind=`                                                                                                                                                          | `[{ id, name, kind, config, secretKeys, secretExpiresOn, lastCheck: { at, ok, detail } \| null, destinations: number, archivedAt }]`           |
+| `POST /api/admin/connections`           | `{ name, kind, config, secrets: { [key]: string }, secretExpiresOn? }`                                                                                            | `201 { id, generated?: { signingSecret } }` (a webhook signing secret left empty is generated and shown once)                                  |
+| `GET /api/admin/connections/:id`        |                                                                                                                                                                   | the list row plus `revisions: [{ revision, createdAt, createdBy, secretsReset }]`                                                              |
+| `PATCH /api/admin/connections/:id`      | `{ name?, config?, secrets?, secretExpiresOn?, archived? }`. No `secrets`: the sealed set is kept. With `secrets`, the whole set is replaced (`""` clears a key). | `{ secretsReset: boolean }` (true when a binding field changed: all secrets were cleared and must be re-entered)                               |
+| `POST /api/admin/connections/:id/check` | `{}`                                                                                                                                                              | `202 { testId }`                                                                                                                               |
+| `POST /api/admin/connection-checks`     | `{ kind, config, secrets }` (unsaved; secrets sealed to the test row)                                                                                             | `202 { testId }`                                                                                                                               |
+| `GET /api/admin/tests/:id`              |                                                                                                                                                                   | `{ id, kind, status: queued\|running\|ok\|failed, result: { summary, facts?, warnings?, target?, evidence? } \| null, createdAt, finishedAt }` |
+
+Secrets are sealed as one record that only the worker can open, so the API cannot merge one new
+value into it: a request that sends `secrets` but leaves out a key that is set gets
+`400 { error, details: { reenter: [keys] } }` (enter them again, or send `""` to clear them).
+Archiving a connection that active destinations still use is `409`.
 
 Secrets are validated with the connection driver's `secretSchema`, sealed with `deps.sealer`
 (AAD `connection:<id>`), and never returned. Changing a field listed in
@@ -56,6 +61,10 @@ included needs `confirmCrossBorder: true` (audited). Deactivating or archiving c
 `cancelPendingDeliveries`; `backfillSince` calls `backfillDeliveries`. Every change adds a
 `destination_revisions` row and an audit row.
 
+Errors: validation problems are `400 { error, details: string[] }`; a missing cross-border
+confirmation is `400 { error, details: ['confirmCrossBorder'] }`; a destination's kind cannot be
+changed (`400`).
+
 ## Templates (admin)
 
 | Route                                                    | Body / query                                                                                                                   | Returns                                                                                                                                             |
@@ -70,6 +79,9 @@ included needs `confirmCrossBorder: true` (audited). Deactivating or archiving c
 | `GET /api/admin/forms/:formId/starter-template`          | `?kind=html\|docx`                                                                                                             | the file                                                                                                                                            |
 | `GET /api/admin/forms/:formId/placeholders`              |                                                                                                                                | `[{ name, label, kind: field\|group\|photo\|reserved, sample }]`                                                                                    |
 | `PUT /api/admin/forms/:formId/document-templates`        | `{ pdf?: id \| null, docx?: id \| null }`                                                                                      | `{ ok }`                                                                                                                                            |
+
+A content type that does not match the template's kind is `415`. Archiving a template, or
+unlinking it from a form, while a destination or the form's default documents use it is `409`.
 
 ## Branding (admin)
 
@@ -103,16 +115,16 @@ gain `deliveryAlertEmails`, `brandName`, `brandColour`.
 
 ## Public API (`/api/v1`, `Authorization: Bearer ff_…`)
 
-| Route                                     | Scope              | Returns                                                                                                                |
-| ----------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/forms`                       | `forms:read`       | `[{ id, name, version, versionId, publishedAt }]`                                                                      |
-| `GET /api/v1/forms/:id/versions/:version` | `forms:read`       | `{ id, version, definition }`                                                                                          |
-| `GET /api/v1/submissions`                 | `submissions:read` | `?formId&since&until&siteId&cursor&limit(≤500)` → `{ data: [submission JSON], next }` ordered by received time then id |
-| `GET /api/v1/submissions/:id`             | `submissions:read` | the submission JSON (schema `fieldforms.submission/1`)                                                                 |
-| `GET /api/v1/submissions/:id/document`    | `submissions:read` | `?format=` → the file                                                                                                  |
-| `GET /api/v1/files/:id`                   | `files:read`       | a photo or signature of a submission the key can see                                                                   |
-| `GET /api/v1/attendance/daily`            | `attendance:read`  | `?from&to&siteId` → the daily report rows                                                                              |
-| `GET /api/v1/openapi.json`                | none               | the OpenAPI 3.1 document                                                                                               |
+| Route                                     | Scope              | Returns                                                                                                                                                                                                                          |
+| ----------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/forms`                       | `forms:read`       | `[{ id, name, version, versionId, publishedAt }]`                                                                                                                                                                                |
+| `GET /api/v1/forms/:id/versions/:version` | `forms:read`       | `{ id, version, definition }`                                                                                                                                                                                                    |
+| `GET /api/v1/submissions`                 | `submissions:read` | `?formId&since&until&siteId&cursor&limit(≤500)` → `{ data: [submission JSON], next, resume }` ordered by received time then id; `next` is null once caught up, so store `resume` for the next poll (the last 30 s are held back) |
+| `GET /api/v1/submissions/:id`             | `submissions:read` | the submission JSON (schema `fieldforms.submission/1`)                                                                                                                                                                           |
+| `GET /api/v1/submissions/:id/document`    | `submissions:read` | `?format=` → the file                                                                                                                                                                                                            |
+| `GET /api/v1/files/:id`                   | `files:read`       | a photo or signature of a submission the key can see                                                                                                                                                                             |
+| `GET /api/v1/attendance/daily`            | `attendance:read`  | `?from&to&siteId` → the daily report rows                                                                                                                                                                                        |
+| `GET /api/v1/openapi.json`                | none               | the OpenAPI 3.1 document                                                                                                                                                                                                         |
 
 Errors: `401 { error }` for a missing, malformed, unknown, revoked or expired key (or one whose
 creator is deactivated); `403` for a missing scope or a form/site outside the key; `429` over
