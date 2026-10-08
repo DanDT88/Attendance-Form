@@ -278,3 +278,50 @@ describe('document downloads', () => {
     ).toBe(400);
   });
 });
+
+describe('paging the delivery log', () => {
+  it('pages through rows written in one transaction (same microsecond updated_at)', async () => {
+    const dests = await t.owner
+      .insertInto('destinations')
+      .values(
+        [1, 2, 3, 4, 5].map((i) => ({
+          form_id: formId,
+          name: `Batch ${i}`,
+          kind: 'email' as const,
+          settings: '{}',
+          include: '{}',
+          templates: '{}',
+        })),
+      )
+      .returning('id')
+      .execute();
+    const ids = (
+      await t.owner
+        .insertInto('deliveries')
+        .values(
+          dests.map((d) => ({
+            submission_id: submissionId,
+            destination_id: d.id,
+            status: 'cancelled' as const,
+          })),
+        )
+        .returning('id')
+        .execute()
+    ).map((r) => r.id);
+    // One statement, one now(): the same updated_at to the microsecond.
+    const seen: string[] = [];
+    let cursor: string | null = '';
+    for (let page = 0; cursor !== null && page < 10; page++) {
+      const r: { rows: { id: string }[]; next: string | null } = (
+        await req(
+          'GET',
+          `/api/deliveries?status=cancelled&limit=2${cursor ? `&cursor=${cursor}` : ''}`,
+          admin,
+        )
+      ).json();
+      seen.push(...r.rows.map((x) => x.id));
+      cursor = r.next;
+    }
+    expect(seen.sort()).toEqual([...ids].sort());
+  });
+});

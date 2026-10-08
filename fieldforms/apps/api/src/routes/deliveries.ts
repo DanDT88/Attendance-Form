@@ -76,8 +76,12 @@ function scoped(db: Db, user: AuthUser) {
   return q;
 }
 
-const cursorOf = (r: { updated_at: Date; id: string }) =>
-  Buffer.from(JSON.stringify([r.updated_at.toISOString(), r.id])).toString('base64url');
+/**
+ * The page cursor: updated_at as microsecond text (a Date keeps only milliseconds, which would
+ * skip rows sharing the last row's timestamp, e.g. everything one transaction wrote) and the id.
+ */
+const cursorOf = (r: { cursor_at: string; id: string }) =>
+  Buffer.from(JSON.stringify([r.cursor_at, r.id])).toString('base64url');
 
 export async function deliveriesRoutes(app: FastifyInstance, deps: AppDeps): Promise<void> {
   const { db, queue } = deps;
@@ -113,6 +117,9 @@ export async function deliveriesRoutes(app: FastifyInstance, deps: AppDeps): Pro
         'dl.delivered_at',
         'dl.created_at',
         'dl.updated_at',
+        sql<string>`to_char(dl.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as(
+          'cursor_at',
+        ),
         'f.name as form_name',
         'site.name as site_name',
         'dst.name as destination_name',
@@ -143,12 +150,10 @@ export async function deliveriesRoutes(app: FastifyInstance, deps: AppDeps): Pro
           string,
           string,
         ];
-        rows = rows.where((eb) =>
-          eb.or([
-            eb('dl.updated_at', '<', new Date(at)),
-            eb.and([eb('dl.updated_at', '=', new Date(at)), eb('dl.id', '<', id)]),
-          ]),
-        );
+        if (typeof at === 'string' && !Number.isNaN(Date.parse(at)) && uuid.safeParse(id).success)
+          rows = rows.where(
+            sql<boolean>`(dl.updated_at, dl.id) < (${at}::timestamptz, ${id}::uuid)`,
+          );
       } catch {
         /* an unreadable cursor starts from the top */
       }
