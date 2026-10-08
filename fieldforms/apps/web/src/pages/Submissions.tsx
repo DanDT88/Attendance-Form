@@ -12,7 +12,9 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { DocumentDownloads, SubmissionDeliveries } from '../components/outputs/SubmissionOutputs';
 import { api, type PublishedForm } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { useBlobUrl } from '../lib/useBlobUrl';
 
 interface SubmissionRow {
@@ -142,6 +144,7 @@ interface Detail {
 
 export function SubmissionDetailPage() {
   const { id } = useParams();
+  const { me } = useAuth();
   const q = useQuery({
     queryKey: ['submission', id],
     queryFn: () => api<Detail>(`/form-submissions/${id}`),
@@ -150,19 +153,15 @@ export function SubmissionDetailPage() {
   if (q.error || !q.data)
     return <p className="error">{(q.error as Error)?.message ?? 'Not found'}</p>;
   const { submission: s, definition, version, lists } = q.data;
-  const json = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(q.data, null, 2))}`;
+  const office = me?.role === 'admin' || me?.role === 'manager';
 
   return (
     <div className="stack">
       <div className="card">
-        <div className="row">
-          <h2>
-            {s.form_name} <span className="muted small">version {version}</span>
-          </h2>
-          <a className="button secondary" href={json} download={`submission-${s.id}.json`}>
-            Download JSON
-          </a>
-        </div>
+        <h2>
+          {s.form_name} <span className="muted small">version {version}</span>
+        </h2>
+        <DocumentDownloads submissionId={s.id} />
         <dl className="facts">
           {s.dispatch_title && (
             <>
@@ -190,6 +189,12 @@ export function SubmissionDetailPage() {
           </dd>
         </dl>
       </div>
+      {office && (
+        <section className="card stack">
+          <h3>Deliveries</h3>
+          <SubmissionDeliveries submissionId={s.id} />
+        </section>
+      )}
       <div className="card answers" data-testid="answers">
         {definition.fields.map((f) => (
           <Answer key={f.id} field={f} value={s.data[f.id]} lists={lists} />

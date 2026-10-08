@@ -133,8 +133,8 @@ export function HealthText({ health, active }: { health: DestinationHealth; acti
         {h.last24h && (
           <>
             {' '}
-            · 24 h: {h.last24h.delivered} delivered, {h.last24h.failed} failed,{' '}
-            {h.last24h.pending} waiting
+            · 24 h: {h.last24h.delivered} delivered, {h.last24h.failed} failed, {h.last24h.pending}{' '}
+            waiting
           </>
         )}
       </span>
@@ -179,8 +179,8 @@ export function VocabularyHint({ names }: { names: Record<string, string> }) {
     <details className="small muted">
       <summary>Names you can use</summary>
       <p>
-        Field ids as they are (in templates <code>{'{{ area }}'}</code> gives the display text),
-        and these:
+        Field ids as they are (in templates <code>{'{{ area }}'}</code> gives the display text), and
+        these:
       </p>
       <dl className="facts">
         {Object.entries(names).map(([k, v]) => (

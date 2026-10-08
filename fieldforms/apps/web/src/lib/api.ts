@@ -405,8 +405,7 @@ export interface Backfilled {
 }
 
 export type BackfillBody = (
-  | { submissionIds: string[] }
-  | { from: string; to: string; siteId?: string }
+  { submissionIds: string[] } | { from: string; to: string; siteId?: string }
 ) & { ignoreCondition?: boolean };
 
 export const destinationsApi = {
@@ -677,9 +676,10 @@ export const deliveriesApi = {
       `/deliveries/${enc(id)}/resend`,
       { method: 'POST' },
     ),
-  retryNow: (id: string) => api<{ ok: boolean }>(`/deliveries/${enc(id)}/retry-now`, { method: 'POST' }),
+  retryNow: (id: string) =>
+    api<{ ok: boolean }>(`/deliveries/${enc(id)}/retry-now`, { method: 'POST' }),
   resendMany: (ids: string[]) =>
-    api<{ resent: number; skipped: unknown }>('/deliveries/resend', {
+    api<{ resent: number; skipped: { id: string; reason: string }[] }>('/deliveries/resend', {
       method: 'POST',
       body: { ids },
     }),

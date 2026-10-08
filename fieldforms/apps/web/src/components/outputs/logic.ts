@@ -96,38 +96,40 @@ export interface ConfigInput {
 }
 
 /** Labels and help for the settings of `connectionConfigSchemas`; the inputs come from the schema. */
-const CONFIG_TEXT: Record<string, { label: string; help?: string; options?: Record<string, string> }> =
-  {
-    host: { label: 'Host name or IP address' },
-    port: { label: 'Port' },
-    username: { label: 'User name' },
-    hostKeySha256: {
-      label: 'Host key fingerprint (SHA256)',
-      help: 'Run “Check connection” to see the key the server presents, compare it with what your IT team gives you, then pin it.',
+const CONFIG_TEXT: Record<
+  string,
+  { label: string; help?: string; options?: Record<string, string> }
+> = {
+  host: { label: 'Host name or IP address' },
+  port: { label: 'Port' },
+  username: { label: 'User name' },
+  hostKeySha256: {
+    label: 'Host key fingerprint (SHA256)',
+    help: 'Run “Check connection” to see the key the server presents, compare it with what your IT team gives you, then pin it.',
+  },
+  endpoint: {
+    label: 'Endpoint URL',
+    help: 'Only for S3-compatible services (MinIO, Wasabi…). Leave empty for Amazon S3.',
+  },
+  region: { label: 'Region' },
+  forcePathStyle: { label: 'Use path-style URLs (MinIO and some S3-compatible services)' },
+  subject: {
+    label: 'Act as this user (optional)',
+    help: 'Google Workspace domain-wide delegation only. Leave empty to use the service account itself.',
+  },
+  tenantId: { label: 'Directory (tenant) id' },
+  clientId: { label: 'Application (client) id' },
+  channelLabel: { label: 'Channel name (for your reference)' },
+  dialect: { label: 'Database', options: { postgres: 'PostgreSQL', sqlserver: 'SQL Server' } },
+  database: { label: 'Database name' },
+  tls: {
+    label: 'TLS',
+    options: {
+      verify: 'Encrypted, certificate verified',
+      off: 'Off (only for private networks the server allows)',
     },
-    endpoint: {
-      label: 'Endpoint URL',
-      help: 'Only for S3-compatible services (MinIO, Wasabi…). Leave empty for Amazon S3.',
-    },
-    region: { label: 'Region' },
-    forcePathStyle: { label: 'Use path-style URLs (MinIO and some S3-compatible services)' },
-    subject: {
-      label: 'Act as this user (optional)',
-      help: 'Google Workspace domain-wide delegation only. Leave empty to use the service account itself.',
-    },
-    tenantId: { label: 'Directory (tenant) id' },
-    clientId: { label: 'Application (client) id' },
-    channelLabel: { label: 'Channel name (for your reference)' },
-    dialect: { label: 'Database', options: { postgres: 'PostgreSQL', sqlserver: 'SQL Server' } },
-    database: { label: 'Database name' },
-    tls: {
-      label: 'TLS',
-      options: {
-        verify: 'Encrypted, certificate verified',
-        off: 'Off (only for private networks the server allows)',
-      },
-    },
-  };
+  },
+};
 
 /** Settings the server derives itself and the form does not ask for. */
 const DERIVED_CONFIG: Partial<Record<ConnectionKind, string[]>> = {
@@ -190,14 +192,18 @@ export function configValues(kind: ConnectionKind, config?: Record<string, unkno
   for (const f of configInputs(kind)) {
     const v = config?.[f.key] ?? f.default;
     if (f.type === 'boolean') out[f.key] = v === true;
-    else if (f.type === 'enum') out[f.key] = v === undefined ? (f.options?.[0]?.value ?? '') : String(v);
+    else if (f.type === 'enum')
+      out[f.key] = v === undefined ? (f.options?.[0]?.value ?? '') : String(v);
     else out[f.key] = v === undefined || v === null ? '' : String(v);
   }
   return out;
 }
 
 /** Turns form values into the settings object the API takes (empty optional values left out). */
-export function configFromValues(kind: ConnectionKind, values: ConfigValues): Record<string, unknown> {
+export function configFromValues(
+  kind: ConnectionKind,
+  values: ConfigValues,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of configInputs(kind)) {
     const v = values[f.key];

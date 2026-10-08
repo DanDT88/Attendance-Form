@@ -724,3 +724,62 @@ fieldset.group legend {
 textarea.json {
   font-size: 13px;
 }
+
+/* Phase 3 screens: outputs, destinations, deliveries, API keys */
+.flag.ok {
+  background: #c6f6d5;
+  color: #22543d;
+}
+.row-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.warnings {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--warn);
+}
+.break {
+  overflow-wrap: anywhere;
+}
+.once {
+  display: block;
+  padding: 8px;
+  background: #fff;
+  border: 1px dashed var(--warn);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.checks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 4px 12px;
+}
+.secret-field.reenter {
+  outline: 2px solid var(--warn);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.test-result {
+  border-left: 4px solid var(--muted);
+  padding: 4px 10px;
+}
+.test-result.ok {
+  border-left-color: var(--ok);
+  color: inherit;
+}
+.test-result.failed {
+  border-left-color: var(--bad);
+}
+tr.selected td {
+  background: #ebf4ff;
+}
+textarea.code {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  min-height: 320px;
+  width: 100%;
+}
