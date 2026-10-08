@@ -138,6 +138,17 @@ describe('backfill and cancel', () => {
     );
   });
 
+  it('gives a condition the submission’s own form version as _version', async () => {
+    const id = await destination('_version = 1 AND _version >= 1');
+    const r = await backfillDeliveries(t.db, queueOf(t), {
+      destinationId: id,
+      submissionIds: subs,
+      triggeredBy: t.fx.users.admin,
+      ignoreCondition: false,
+    });
+    expect(r).toEqual({ created: 2, skipped: 0, existing: 0 });
+  });
+
   it('cancels pending deliveries with an attempt row each', async () => {
     const id = await destination(null);
     await backfillDeliveries(t.db, queueOf(t), {

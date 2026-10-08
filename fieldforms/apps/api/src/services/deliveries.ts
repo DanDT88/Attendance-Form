@@ -23,6 +23,9 @@ import type { JobQueue } from './registers.js';
 interface SubmissionFacts {
   id: string;
   formId: string;
+  /** The form version the submission was filled in with (`_version`). */
+  version: number;
+  versionId: string;
   definition: FormDefinition;
   answers: Answers;
   receivedAt: Date;
@@ -59,6 +62,8 @@ export async function submissionFacts(
       's.device_captured_at',
       's.clock_skew_flag',
       's.site_id',
+      'v.id as version_id',
+      'v.version',
       'v.definition',
       'st.name as site',
       'r.name as region',
@@ -72,6 +77,8 @@ export async function submissionFacts(
     out.set(r.id, {
       id: r.id,
       formId: r.form_id,
+      version: r.version,
+      versionId: r.version_id,
       definition: r.definition as FormDefinition,
       answers: r.data as Answers,
       receivedAt: r.server_received_at,
@@ -114,7 +121,12 @@ export function evaluateCondition(
     facts.definition,
     facts.answers,
     {
-      form: { id: facts.formId, name: formName, version: 0, versionId: '' },
+      form: {
+        id: facts.formId,
+        name: formName,
+        version: facts.version,
+        versionId: facts.versionId,
+      },
       submission: {
         id: facts.id,
         receivedAt: facts.receivedAt,
