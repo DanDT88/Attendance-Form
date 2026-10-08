@@ -120,6 +120,23 @@ describe('analyzing Word templates', () => {
     });
     const a = await analyzeTemplate('docx', linked, VERSIONS);
     expect(a.errors[0]).toMatch(/links to something outside the file/);
+    // Character references cannot hide the mode, and a target with a scheme is refused anyway.
+    for (const rel of [
+      'Target="media/x.png" TargetMode="&#69;xternal"',
+      'Target="media/x.png" TargetMode="&#x45;xternal"',
+      'Target="&#102;ile:///etc/x.png"',
+    ]) {
+      const hidden = patchZip(base, {
+        'word/_rels/document.xml.rels': (x) =>
+          x.replace(
+            '</Relationships>',
+            `<Relationship Id="rIdY" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" ${rel}/></Relationships>`,
+          ),
+      });
+      expect((await analyzeTemplate('docx', hidden, VERSIONS)).errors[0], rel).toMatch(
+        /links to something outside the file/,
+      );
+    }
     const notWord = await analyzeTemplate('docx', Buffer.from('<html></html>'), VERSIONS);
     expect(notWord.errors).toEqual(['The file is not a Word document (.docx)']);
     const clean = await analyzeTemplate('docx', base, VERSIONS);

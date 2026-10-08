@@ -60,6 +60,16 @@ const REMOTE_FIELDS = new Set([
   'DDEAUTO',
 ]);
 
+/**
+ * Numeric character references decoded (`&#69;xternal` is "External" to every XML parser), so a
+ * check below cannot be dodged by spelling a keyword with them.
+ */
+const decodeNumeric = (s: string) =>
+  s.replace(/&#(x[0-9a-f]+|[0-9]+);?/gi, (_, n: string) => {
+    const code = n[0] === 'x' || n[0] === 'X' ? parseInt(n.slice(1), 16) : parseInt(n, 10);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
+  });
+
 const decode = (s: string) =>
   s
     .replace(/&quot;/g, '"')
@@ -106,8 +116,12 @@ export function packageProblems(zip: PizZip): string[] {
     if (entry.dir) continue;
     const lower = name.toLowerCase();
     if (lower.endsWith('.rels')) {
-      const rels = entry.asText();
-      if (/\bTargetMode\s*=\s*["']\s*External\s*["']/i.test(rels)) {
+      const rels = decodeNumeric(entry.asText());
+      // External mode, or a target with a URI scheme (file:, http:, …) whatever its mode says.
+      if (
+        /\bTargetMode\s*=\s*["']\s*External\s*["']/i.test(rels) ||
+        /\bTarget\s*=\s*["']\s*[a-z][a-z0-9+.-]*:/i.test(rels)
+      ) {
         problems.add(
           'The template links to something outside the file (a linked picture, a hyperlink, an ' +
             'attached template or a linked object). Remove the links, embed pictures, and upload it again.',
@@ -122,7 +136,7 @@ export function packageProblems(zip: PizZip): string[] {
       lower.endsWith('.xml') &&
       (lower.startsWith('word/') || lower.startsWith('customxml/'))
     ) {
-      const xml = entry.asText();
+      const xml = decodeNumeric(entry.asText());
       for (const code of fieldCodes(xml)) {
         const f = fieldName(code);
         if (REMOTE_FIELDS.has(f)) {
