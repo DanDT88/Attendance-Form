@@ -1,3 +1,4 @@
+import { DISPLAY_TZ, wallClockToUtc } from '@fieldforms/shared';
 import { Liquid, type LiquidOptions } from 'liquidjs';
 
 /**
@@ -32,6 +33,20 @@ const ESCAPERS: Record<LiquidContext, (s: string) => string> = {
   text: noControl,
 };
 
+/**
+ * A date or date and time with no offset ('2026-10-31 23:30', as `_captured` and `_received` are
+ * written): South African wall-clock time. liquidjs would read it in the process time zone (UTC in
+ * the images) and then show it in SAST, two hours late.
+ */
+const WALL_CLOCK = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/;
+const DATE_FILTERS = [
+  'date',
+  'date_to_xmlschema',
+  'date_to_rfc822',
+  'date_to_string',
+  'date_to_long_string',
+];
+
 const base: LiquidOptions = {
   templates: {},
   relativeReference: false,
@@ -54,6 +69,16 @@ function engine(context: LiquidContext): Liquid {
   });
   // `raw` would bypass outputEscape; make it a no-op so escaping always applies.
   liquid.registerFilter('raw', (v: unknown) => v);
+  for (const name of DATE_FILTERS) {
+    const builtin = liquid.filters[name] as (this: unknown, ...args: unknown[]) => unknown;
+    liquid.registerFilter(name, function (v: unknown, ...args: unknown[]) {
+      const at =
+        typeof v === 'string' && WALL_CLOCK.test(v)
+          ? wallClockToUtc(v.replace(' ', 'T'), DISPLAY_TZ)
+          : v;
+      return builtin.call(this, at, ...args);
+    });
+  }
   return liquid;
 }
 
