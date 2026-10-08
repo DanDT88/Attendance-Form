@@ -305,6 +305,11 @@ export function FormEditor() {
       <div className="card stack">
         <div className="row">
           <Link to="/admin/forms">← Forms</Link>
+          <span className="row-start">
+            <Link to={`/admin/forms/${id}/destinations`} data-testid="form-destinations">
+              Destinations
+            </Link>
+          </span>
           <span className="small muted">
             {loaded.data!.versions.length
               ? `Latest: v${loaded.data!.versions[0]!.version}, ${formatLocal(loaded.data!.versions[0]!.published_at)}`

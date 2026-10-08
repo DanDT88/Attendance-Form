@@ -4,6 +4,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from '../lib/api';
 import { ConnectionsAdmin } from './Connections';
+import { DestinationsAdmin } from './Destinations';
 import { FormEditor, FormsAdmin, GroupsAdmin, ListsAdmin } from './FormBuilder';
 
 /* Admin screens: deliberately plain forms and tables. Nothing is ever hard-deleted; "Deactivate" hides it. */
@@ -118,6 +119,7 @@ export function AdminPage() {
         <Route index element={<Navigate to="org" replace />} />
         <Route path="forms" element={<FormsAdmin />} />
         <Route path="forms/:id" element={<FormEditor />} />
+        <Route path="forms/:id/destinations" element={<DestinationsAdmin />} />
         <Route path="lists" element={<ListsAdmin />} />
         <Route path="groups" element={<GroupsAdmin />} />
         <Route path="org" element={<OrgAdmin />} />
