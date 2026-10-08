@@ -203,14 +203,17 @@ export async function loadTemplate(
 }
 
 /**
- * The cache key of a rendering: the submission, format, template version, what is included and
- * the renderers' version. The field list is sorted, since its order does not change the output.
+ * The cache key of a rendering: the submission, format, template version, what is included, the
+ * renderers' version and the document model itself (branding, site, company and form names,
+ * labels, link), so a change to anything a document shows renders it again. The field list is
+ * sorted, since its order does not change the output.
  */
 export function renderCacheKey(input: {
   submissionId: string;
   format: Format;
   templateVersionId: string | null;
   include: DestinationInclude;
+  model: DocumentModel;
 }): string {
   const i = input.include;
   return sha256(
@@ -218,6 +221,7 @@ export function renderCacheKey(input: {
       submissionId: input.submissionId,
       format: input.format,
       templateVersionId: input.templateVersionId,
+      model: sha256(JSON.stringify(input.model)),
       include: {
         fields: i.fields === 'all' ? 'all' : [...i.fields].sort(),
         photos: i.photos,
@@ -300,7 +304,7 @@ async function toCache(
 
 /**
  * Renders one format, reusing a cached rendering (rendered_documents + blob store) keyed by the
- * submission, format, template version, include settings and RENDERER_VERSION. `stem` is the
+ * submission, format, template version, include settings, model and RENDERER_VERSION. `stem` is the
  * safe file name without extension. Samples (no submission id) are never cached.
  */
 export async function renderFormat(
@@ -321,6 +325,7 @@ export async function renderFormat(
         format: input.format,
         templateVersionId: input.template?.versionId ?? null,
         include: input.include,
+        model: input.model,
       })
     : null;
   if (key) {

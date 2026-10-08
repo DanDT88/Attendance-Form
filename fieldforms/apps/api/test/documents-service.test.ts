@@ -419,6 +419,7 @@ describe('loading a template', () => {
           format: 'pdf',
           templateVersionId: v1,
           include: INCLUDE_ALL,
+          model,
         }),
       )
       .executeTakeFirstOrThrow();
@@ -464,7 +465,13 @@ describe('rendering', () => {
     expect(html).not.toMatch(/<script/i);
     expect(html.match(/src="data:image\/(jpeg|png);base64,/g)).toHaveLength(4); // logo, 2 photos, signature
 
-    const key = renderCacheKey({ submissionId, format: 'pdf', templateVersionId: null, include });
+    const key = renderCacheKey({
+      submissionId,
+      format: 'pdf',
+      templateVersionId: null,
+      include,
+      model,
+    });
     const row = await t.owner
       .selectFrom('rendered_documents')
       .selectAll()
@@ -501,6 +508,7 @@ describe('rendering', () => {
         format: 'pdf',
         templateVersionId: null,
         include: { ...include, fields: ['b', 'a'] },
+        model,
       }),
     ).toBe(
       renderCacheKey({
@@ -508,9 +516,41 @@ describe('rendering', () => {
         format: 'pdf',
         templateVersionId: null,
         include: { ...include, fields: ['a', 'b'] },
+        model,
       }),
     );
     expect(RENDERER_VERSION).toBe(1);
+  });
+
+  it('renders again when the branding, a name or a label has changed since the cached copy', async () => {
+    const model = (await loadSubmission(t.db, submissionId, include, PUBLIC_URL))!.model;
+    const input = {
+      submissionId,
+      model,
+      include,
+      format: 'pdf' as const,
+      template: null,
+      stem: 'S',
+      signal: signal(),
+    };
+    await renderFormat(deps, input);
+    expect((await renderFormat(deps, input)).cached).toBe(true);
+
+    // The admin sets the company colour after go-live: the next PDF shows it.
+    const branded = { ...model, branding: { ...model.branding, colour: '#123456' } };
+    const calls = t.pdf.calls.length;
+    expect((await renderFormat(deps, { ...input, model: branded })).cached).toBe(false);
+    expect(t.pdf.calls[calls]!.input).toContain('#123456');
+    expect((await renderFormat(deps, { ...input, model: branded })).cached).toBe(true);
+
+    // A renamed site, or a corrected option label, is another document too.
+    const renamed = { ...branded, submission: { ...branded.submission, site: 'Site A (East)' } };
+    expect((await renderFormat(deps, { ...input, model: renamed })).cached).toBe(false);
+    const relabelled = {
+      ...renamed,
+      fields: renamed.fields.map((f, i) => (i === 0 ? { ...f, label: `${f.label} (new)` } : f)),
+    };
+    expect((await renderFormat(deps, { ...input, model: relabelled })).cached).toBe(false);
   });
 
   it('renders again when the cached copy is damaged', async () => {
@@ -530,6 +570,7 @@ describe('rendering', () => {
       format: 'json',
       templateVersionId: null,
       include: INCLUDE_ALL,
+      model,
     });
     const row = await t.owner
       .selectFrom('rendered_documents')
