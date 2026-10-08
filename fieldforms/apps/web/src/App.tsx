@@ -25,6 +25,9 @@ const SubmissionDetailPage = lazy(() =>
 const DispatchPage = lazy(() =>
   import('./pages/Dispatch').then((m) => ({ default: m.DispatchPage })),
 );
+const DeliveriesPage = lazy(() =>
+  import('./pages/Deliveries').then((m) => ({ default: m.DeliveriesPage })),
+);
 const TasksPage = lazy(() => import('./pages/Dispatch').then((m) => ({ default: m.TasksPage })));
 
 export function App() {
@@ -55,6 +58,7 @@ export function App() {
           <NavLink to="/submissions">Submissions</NavLink>
           {office && <NavLink to="/reports">Reports</NavLink>}
           {office && <NavLink to="/tasks">Tasks</NavLink>}
+          {office && <NavLink to="/deliveries">Deliveries</NavLink>}
           {me.role === 'admin' && <NavLink to="/admin">Admin</NavLink>}
         </nav>
         <div className="topbar-right">
@@ -82,6 +86,7 @@ export function App() {
             {office && <Route path="/dispatch/:formId" element={<DispatchPage />} />}
             {office && <Route path="/tasks" element={<TasksPage />} />}
             {office && <Route path="/reports" element={<ReportsPage />} />}
+            {office && <Route path="/deliveries" element={<DeliveriesPage />} />}
             {office && <Route path="/registers/:id" element={<RegisterDetailPage />} />}
             {me.role === 'admin' && <Route path="/admin/*" element={<AdminPage />} />}
             <Route path="*" element={<Navigate to="/" replace />} />

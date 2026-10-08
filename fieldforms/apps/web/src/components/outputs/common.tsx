@@ -114,7 +114,13 @@ export function ShownOnce({
 const when = (d: string | null | undefined) => (d ? formatLocal(d) : null);
 
 /** A destination's health in a line: failing since, failures in a row, last success. */
-export function HealthText({ health, active }: { health: DestinationHealth; active: boolean }) {
+export function HealthText({
+  health,
+  active,
+}: {
+  health: Omit<DestinationHealth, 'lastFailureAt'>;
+  active: boolean;
+}) {
   const h = health;
   return (
     <span className="small">
