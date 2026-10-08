@@ -2,7 +2,8 @@ import { formatLocal } from '@fieldforms/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { api } from '../lib/api';
+import { CompanyBranding } from '../components/outputs/Branding';
+import { api, type CompanyRow } from '../lib/api';
 import { ApiKeysAdmin } from './ApiKeys';
 import { ConnectionsAdmin } from './Connections';
 import { DestinationsAdmin } from './Destinations';
@@ -11,12 +12,7 @@ import { FormEditor, FormsAdmin, GroupsAdmin, ListsAdmin } from './FormBuilder';
 
 /* Admin screens: deliberately plain forms and tables. Nothing is ever hard-deleted; "Deactivate" hides it. */
 
-interface Company {
-  id: string;
-  name: string;
-  report_recipients: string[];
-  deactivated_at: string | null;
-}
+type Company = CompanyRow;
 interface Region {
   id: string;
   name: string;
@@ -143,6 +139,7 @@ export function AdminPage() {
 
 function OrgAdmin() {
   const companies = useList<Company>('/admin/companies');
+  const [branding, setBranding] = useState<string | null>(null);
   const regions = useList<Region>('/admin/regions');
   const sites = useList<Site>('/admin/sites');
   const shifts = useList<Shift>('/admin/shifts');
@@ -156,7 +153,7 @@ function OrgAdmin() {
       <Section title="Companies">
         <table className="report">
           <tbody>
-            {companies.data?.map((c) => (
+            {companies.data?.map((c) => [
               <tr key={c.id} className={c.deactivated_at ? 'inactive' : ''}>
                 <td>{c.name}</td>
                 <td className="small">
@@ -182,13 +179,27 @@ function OrgAdmin() {
                   </button>{' '}
                   <button
                     className="link small"
+                    aria-expanded={branding === c.id}
+                    onClick={() => setBranding(branding === c.id ? null : c.id)}
+                  >
+                    Branding
+                  </button>{' '}
+                  <button
+                    className="link small"
                     onClick={() => void toggle(`/admin/companies/${c.id}`, c.deactivated_at)}
                   >
                     {c.deactivated_at ? 'Reactivate' : 'Deactivate'}
                   </button>
                 </td>
-              </tr>
-            ))}
+              </tr>,
+              branding === c.id && (
+                <tr key={`${c.id}-branding`}>
+                  <td colSpan={3}>
+                    <CompanyBranding company={c} onSaved={() => void companies.refetch()} />
+                  </td>
+                </tr>
+              ),
+            ])}
           </tbody>
         </table>
         <form
@@ -710,6 +721,9 @@ function SettingsAdmin() {
             attendanceRetentionYears: Number(f.attendanceRetentionYears),
             privacyNoticeVersion: f.privacyNoticeVersion,
             privacyNoticeText: f.privacyNoticeText,
+            deliveryAlertEmails: list(f.deliveryAlertEmails),
+            brandName: f.brandName,
+            brandColour: f.brandColour,
           });
           setSaved(ok);
         }}
@@ -749,6 +763,34 @@ function SettingsAdmin() {
             rows={10}
             defaultValue={s.privacyNoticeText}
             required
+          />
+        </label>
+        <label>
+          Delivery alert emails
+          <input
+            name="deliveryAlertEmails"
+            defaultValue={((s.deliveryAlertEmails as unknown as string[] | undefined) ?? []).join(
+              ', ',
+            )}
+          />
+          <span className="small muted">
+            Comma separated. Told when a destination keeps failing or gives up; when empty, every
+            admin with an email is told.
+          </span>
+        </label>
+        <label>
+          Brand name
+          <input name="brandName" defaultValue={s.brandName} required maxLength={120} />
+          <span className="small muted">Shown on documents when a company has no branding.</span>
+        </label>
+        <label>
+          Brand colour
+          <input
+            name="brandColour"
+            defaultValue={s.brandColour}
+            required
+            pattern="#[0-9a-fA-F]{6}"
+            title="A colour like #1B365D"
           />
         </label>
         <button>Save settings</button>
