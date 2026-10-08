@@ -158,11 +158,36 @@ tested or tested by hand only (see the notes)
 
 ## Phase 3: Outputs and destinations
 
-- [ ] Renderers: PDF, DOCX, XLSX, JSON, XML, images; branded templates
-- [ ] Destination adapter interface, per-form destinations, rules
-- [ ] Delivery log, retries, dead-letter queue with alert, manual redeliver
-- [ ] Adapters: SMTP, webhook, SFTP, S3, Google Drive, OneDrive, Slack, SQL, Google Sheets
-- [ ] REST API with API keys; secrets encrypted at rest
+Built and tested (548 API integration tests, web tests, a Playwright smoke test of every new
+screen against the real API); the closing steps below are still open.
+
+- [x] Renderers: PDF (built-in layout or HTML template via Gotenberg; Word templates via
+      LibreOffice), Word (built-in or docxtemplater templates), Excel, JSON, XML, photos ZIP;
+      company branding; versioned templates checked on save
+- [x] Destinations per form with formats, templates, conditions, POPIA include filter,
+      cross-border confirmation, revisions; the `deliveries` row as the state machine
+- [x] Delivery log, retries with backoff (about a day), give-up alerts by email, resend, retry
+      now, backfill, test sends and connection checks run by the worker
+- [x] Destinations: email, signed webhook, Slack, SFTP, S3, Google Drive, Google Sheets,
+      OneDrive/SharePoint, SQL table (PostgreSQL, SQL Server)
+- [x] Secrets sealed to the worker (X25519 + AES-GCM), key rotation script; outbound network guard
+- [x] Public REST API `/api/v1` with hashed, scoped API keys, OpenAPI document, sync example
+- [x] Office screens: connections, destinations, templates, deliveries, API keys, submission
+      downloads, branding and settings
+- [ ] Adversarial code review of the Phase 3 diff, and fixes
+- [ ] End-to-end delivery test (webhook receiver, signature check, resend) in Playwright
+- [ ] Docker run from empty volumes: real Gotenberg PDF to Mailpit, webhook, SFTP, S3
+      (LocalStack), SQL Server
+- [ ] Phase 3 report (works / untested / limitations)
+
+Known so far:
+
+- Live-service tests ran once each against real servers (Gotenberg, LibreOffice, Mailpit,
+  LocalStack S3, SQL Server, PostgreSQL); Google, Microsoft and Slack only against local fakes.
+- Changing any secret of a connection replaces the whole set (the API cannot open sealed
+  secrets to merge one value).
+- The API image installs a font from the Alpine CDN, which this build sandbox could not reach:
+  text on generated sample images (test sends) is untested in Docker.
 
 ## Phase 4: Dashboards
 
