@@ -556,6 +556,32 @@ describe('resend and retry', () => {
     expect(resolveTargetCalls).toBe(2);
   });
 
+  it('tells retries and resends what earlier attempts wrote, a failed one included', async () => {
+    const dest = await destination();
+    const s = await submit(17);
+    await planDeliveries(t.db, deps.queue, s);
+    const d = await deliveryOf(s, dest);
+    const partial = { paths: ['/in/A abc.pdf'], sizes: [3] };
+    steps = [
+      {
+        throw: new DeliveryError('Timed out', {
+          permanent: false,
+          errorClass: 'unreachable',
+          evidence: partial,
+        }),
+      },
+    ];
+    expect(await runDelivery(deps, { deliveryId: d.id, generation: 1 })).toBe('retry');
+    expect((await attemptsOf(d.id))[0]!.evidence).toEqual(partial);
+    expect(calls.at(-1)!.ctx.earlierEvidence).toEqual([]);
+    await t.db.transaction().execute((trx) => retryNow(trx, deps.queue, d.id));
+    expect(await runDelivery(deps, { deliveryId: d.id, generation: 1 })).toBe('delivered');
+    expect(calls.at(-1)!.ctx.earlierEvidence).toEqual([partial]);
+    await t.db.transaction().execute((trx) => resendDeliveries(trx, deps.queue, [d.id]));
+    expect(await runDelivery(deps, { deliveryId: d.id, generation: 2 })).toBe('delivered');
+    expect(calls.at(-1)!.ctx.earlierEvidence).toEqual([partial, { status: 200 }]);
+  });
+
   it('brings a waiting retry forward', async () => {
     const dest = await destination();
     const s = await submit(14);

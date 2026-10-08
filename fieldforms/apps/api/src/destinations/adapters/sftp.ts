@@ -18,11 +18,12 @@ import {
  * Each file is written to a hidden temporary name in the target folder and then renamed onto
  * its final name, so nobody downstream ever picks up a half-written file. File names carry the
  * submission's short id, and a file is only ever replaced by a retry or resend of the same
- * delivery: SFTP has no metadata to tag a file with, so the first upload of a delivery (the
- * attempt that fixed its target) refuses any file already at its name, and renames with the
- * plain SFTP rename, which OpenSSH refuses onto an existing file. Later attempts and resends
- * replace their own earlier file with posix-rename@openssh.com (atomic), or, on servers without
- * it, by removing the old file first.
+ * delivery: SFTP has no metadata to tag a file with, so a file is this delivery's own only when
+ * the evidence of an earlier attempt or generation of it lists the path (a failed attempt
+ * records the files it had already placed). Any other file at a name is refused, on every
+ * attempt and generation, and the rename is the plain SFTP rename, which OpenSSH refuses onto an
+ * existing file. The delivery's own earlier files are replaced with posix-rename@openssh.com
+ * (atomic), or, on servers without it, by removing the old file first.
  *
  * A folder template starting with "/" is absolute; otherwise it is relative to the login folder.
  */
@@ -33,8 +34,6 @@ type SftpTarget = {
   /** The folder as rendered: "" (the login folder), "reports/2026-10" or "/srv/in". */
   folder: string;
   paths: string[];
-  /** The attempt that fixed the target: the first one that can have written anything. */
-  fixedOnAttempt: number;
 };
 
 const joinPath = (folder: string, name: string) =>
@@ -62,7 +61,7 @@ async function planTarget(ctx: DeliveryContext, settings: Settings): Promise<Sft
         errorClass: 'internal',
         detail: f.name,
       });
-  return { folder, paths, fixedOnAttempt: ctx.delivery.attempt };
+  return { folder, paths };
 }
 
 /** The target fixed for this generation (or planned now), lined up with the rendered files. */
@@ -78,7 +77,6 @@ async function targetFor(ctx: DeliveryContext, settings: Settings): Promise<Sftp
   return {
     folder: typeof t.folder === 'string' ? t.folder : '',
     paths: t.paths.map(String),
-    fixedOnAttempt: typeof t.fixedOnAttempt === 'number' ? t.fixedOnAttempt : 1,
   };
 }
 
@@ -198,6 +196,26 @@ const conflict = (path: string) =>
     detail: path,
   });
 
+/** Final paths this delivery's earlier attempts (any generation) say they wrote. */
+function ownPaths(ctx: DeliveryContext): Set<string> {
+  const out = new Set<string>();
+  for (const e of ctx.earlierEvidence) {
+    const paths = (e as { paths?: unknown } | null)?.paths;
+    if (Array.isArray(paths)) for (const p of paths) if (typeof p === 'string') out.add(p);
+  }
+  return out;
+}
+
+/** The same failure, saying which files were already in place (so a retry may replace them). */
+const withEvidence = (err: DeliveryError, evidence: Record<string, unknown>) =>
+  new DeliveryError(err.message, {
+    permanent: err.permanent,
+    errorClass: err.errorClass,
+    detail: err.detail,
+    status: err.status,
+    evidence,
+  });
+
 const posixRenameMissing = (err: unknown) =>
   /does not support/i.test((err as OpError)?.message ?? '') || (err as OpError)?.code === 8;
 
@@ -207,9 +225,9 @@ async function place(
   env: AdapterEnv,
   tmp: string,
   final: string,
-  firstUpload: boolean,
+  replace: boolean,
 ): Promise<void> {
-  if (firstUpload) {
+  if (!replace) {
     try {
       await step(env, 'rename', final, () => s.client.rename(tmp, final));
     } catch (err) {
@@ -251,10 +269,7 @@ export const sftpAdapter: DestinationAdapter<Settings, SftpConfig> = {
   async deliver(ctx, settings, conn, env) {
     const c = requireConnection(conn);
     const target = await targetFor(ctx, settings);
-    // The attempt that fixed the target is the first that can have written anything, so a file
-    // already at a final name is not this delivery's. Test files ("TEST " names) may be replaced.
-    const firstUpload =
-      !ctx.test && ctx.delivery.generation === 1 && target.fixedOnAttempt === ctx.delivery.attempt;
+    const own = ownPaths(ctx);
     const where = { host: c.config.host, port: c.config.port ?? 22, folder: target.folder };
     // e.g. the photos format of a submission without photos.
     if (!ctx.files.length)
@@ -269,8 +284,10 @@ export const sftpAdapter: DestinationAdapter<Settings, SftpConfig> = {
       const home = await loginFolder(s, env);
       await mkdirp(s, env, absolutePath(home, target.folder));
       const finals = target.paths.map((p) => absolutePath(home, p));
-      if (firstUpload)
-        for (const final of finals) if (await statOrNull(s, env, final)) throw conflict(final);
+      // Only a file this delivery wrote before may be replaced; test files ("TEST " names) too.
+      const replace = finals.map((f) => !!ctx.test || own.has(f));
+      for (const [i, final] of finals.entries())
+        if (!replace[i] && (await statOrNull(s, env, final))) throw conflict(final);
 
       const sizes: number[] = [];
       for (const [i, file] of ctx.files.entries()) {
@@ -290,11 +307,13 @@ export const sftpAdapter: DestinationAdapter<Settings, SftpConfig> = {
               errorClass: 'unreachable',
               detail: `${tmp}: ${st.size} of ${file.data.length} bytes`,
             });
-          await place(s, env, tmp, final, firstUpload);
+          await place(s, env, tmp, final, replace[i]!);
           sizes.push(st.size);
         } catch (err) {
           await s.client.delete(tmp, true).catch(() => undefined);
-          throw err;
+          throw i > 0 && err instanceof DeliveryError
+            ? withEvidence(err, { paths: finals.slice(0, i), sizes })
+            : err;
         }
       }
       return {

@@ -61,6 +61,12 @@ export interface DeliveryContext {
    * pre-generated file id), or null on the first attempt. Retries must reuse it.
    */
   target: Record<string, unknown> | null;
+  /**
+   * The evidence of this delivery's earlier attempts, every generation, oldest first (including
+   * what a failed attempt had already written). An adapter that cannot tag what it writes (SFTP)
+   * uses it to tell its own earlier files from anyone else's. Empty for test sends.
+   */
+  earlierEvidence: Record<string, unknown>[];
   /** In-app link to the submission (sign-in required). */
   link: string;
 }
@@ -192,15 +198,24 @@ export class DeliveryError extends Error {
   readonly errorClass: ErrorClass;
   readonly detail?: string;
   readonly status?: number;
+  /** What the attempt had already done when it failed (kept on the attempt row). */
+  readonly evidence?: Record<string, unknown>;
   constructor(
     safeMessage: string,
-    opts: { permanent: boolean; errorClass: ErrorClass; detail?: string; status?: number },
+    opts: {
+      permanent: boolean;
+      errorClass: ErrorClass;
+      detail?: string;
+      status?: number;
+      evidence?: Record<string, unknown>;
+    },
   ) {
     super(safeMessage);
     this.permanent = opts.permanent;
     this.errorClass = opts.errorClass;
     this.detail = opts.detail;
     this.status = opts.status;
+    this.evidence = opts.evidence;
   }
 }
 

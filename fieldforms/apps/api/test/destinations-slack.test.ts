@@ -149,6 +149,7 @@ function makeCtx(o: { where?: string; site?: string; test?: boolean } = {}): Del
     liquid: (t, c) => renderLiquid(t, data, c),
     contacts: { submitterEmail: null, taskSenderEmail: null, siteRecipients: [], siteManagers: [] },
     target: null,
+    earlierEvidence: [],
     link: model.submission.url,
   };
 }

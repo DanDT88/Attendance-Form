@@ -119,6 +119,7 @@ export function makeCtx(
     liquid: (t, c) => renderLiquid(t, templateData(m), c),
     contacts: { submitterEmail: null, taskSenderEmail: null, siteRecipients: [], siteManagers: [] },
     target: null,
+    earlierEvidence: [],
     link: m.submission.url,
     ...rest,
   };

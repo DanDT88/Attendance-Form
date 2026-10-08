@@ -123,7 +123,6 @@ describe('SFTP adapter', () => {
     expect(target).toEqual({
       folder: 'reports/Durban North',
       paths: ['reports/Durban North/Site inspection abcdef12.pdf'],
-      fixedOnAttempt: 1,
     });
     // The folder template changed since: the retry still goes where the first attempt went.
     const retry = fileContext({ attempt: 2, target });
@@ -159,10 +158,11 @@ describe('SFTP adapter', () => {
 
   it('replaces its own file on a retry with posix-rename', async () => {
     const first = fileContext();
-    await attempt(first);
+    const done = await attempt(first);
     const retry = fileContext({
       attempt: 2,
       target: first.target,
+      earlier: [done.evidence],
       files: [pdf('Site inspection abcdef12.pdf', 'retried')],
     });
     server.log.length = 0;
@@ -176,12 +176,13 @@ describe('SFTP adapter', () => {
   });
 
   it('replaces its own file on a resend without posix-rename (remove, then rename)', async () => {
-    await attempt(fileContext());
+    const done = await attempt(fileContext());
     server.posixRename = false;
     server.log.length = 0;
     // A resend is a new generation with a freshly fixed target.
     const resend = fileContext({
       generation: 2,
+      earlier: [done.evidence],
       files: [pdf('Site inspection abcdef12.pdf', 'resent')],
     });
     const r = await attempt(resend);
@@ -211,6 +212,47 @@ describe('SFTP adapter', () => {
       // Found before anything was uploaded.
       expect(server.log.some((l) => l.startsWith('OPEN '))).toBe(false);
     }
+  });
+
+  it("refuses another submission's file on a retry or resend that never wrote it", async () => {
+    const final = `${HOME}/reports/Durban North/Site inspection abcdef12.pdf`;
+    await fs.mkdir(server.local(`${HOME}/reports/Durban North`), { recursive: true });
+    await fs.writeFile(server.local(final), 'theirs');
+    // Attempt 1 fixed the target and then could not reach the server, so it wrote nothing.
+    const first = fileContext();
+    const target = await sftpAdapter.resolveTarget!(first, settings(), conn(), adapterEnv());
+    for (const posix of [true, false]) {
+      server.posixRename = posix;
+      for (const ctx of [fileContext({ attempt: 2, target }), fileContext({ generation: 2 })]) {
+        const err = await failure(attempt(ctx));
+        expect(err.errorClass).toBe('conflict');
+        expect(err.permanent).toBe(true);
+        expect(await read(final)).toBe('theirs');
+      }
+    }
+  });
+
+  it('replaces a file that an earlier, failed attempt of the delivery placed', async () => {
+    const folder = `${HOME}/reports/Durban North`;
+    const files = [pdf('Site inspection abcdef12.pdf', 'one'), pdf('Photos abcdef12.pdf', 'two')];
+    server.before = (op, p) => {
+      if (op === 'OPEN' && p.startsWith(`${folder}/.Photos`)) server.failNext('OPEN');
+    };
+    const first = fileContext({ files });
+    const err = await failure(attempt(first));
+    // The first file was in place before the second failed: the attempt says so.
+    expect(err.evidence).toEqual({
+      paths: [`${folder}/Site inspection abcdef12.pdf`],
+      sizes: [12],
+    });
+    server.before = undefined;
+    const again = [pdf('Site inspection abcdef12.pdf', 'uno'), pdf('Photos abcdef12.pdf', 'dos')];
+    const r = await attempt(
+      fileContext({ attempt: 2, target: first.target, files: again, earlier: [err.evidence!] }),
+    );
+    expect(r.outcome).toBe('delivered');
+    expect(await read(`${folder}/Site inspection abcdef12.pdf`)).toBe('%PDF-1.7 uno');
+    expect(await read(`${folder}/Photos abcdef12.pdf`)).toBe('%PDF-1.7 dos');
   });
 
   it('fails as a conflict when a file appears at the name during the upload', async () => {
@@ -255,9 +297,11 @@ describe('SFTP adapter', () => {
 
   it('removes the temporary file when a retry cannot posix-rename', async () => {
     const first = fileContext();
-    await attempt(first);
+    const done = await attempt(first);
     server.failNext('POSIX_RENAME', STATUS.PERMISSION_DENIED);
-    const err = await failure(attempt(fileContext({ attempt: 2, target: first.target })));
+    const err = await failure(
+      attempt(fileContext({ attempt: 2, target: first.target, earlier: [done.evidence] })),
+    );
     expect(err.errorClass).toBe('rejected');
     expect(await partFiles()).toEqual([]);
   });

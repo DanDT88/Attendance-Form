@@ -168,6 +168,7 @@ function makeCtx(o: { resend?: boolean; test?: boolean; files?: RenderedFile[] }
     liquid: (t, c) => renderLiquid(t, data, c),
     contacts: { submitterEmail: null, taskSenderEmail: null, siteRecipients: [], siteManagers: [] },
     target: null,
+    earlierEvidence: [],
     link: model.submission.url,
   };
   return ctx;

@@ -57,6 +57,8 @@ export interface ContextOptions {
   files?: RenderedFile[];
   test?: boolean;
   target?: Record<string, unknown> | null;
+  /** Evidence of this delivery's earlier attempts (what they wrote). */
+  earlier?: Record<string, unknown>[];
   site?: string;
 }
 
@@ -109,6 +111,7 @@ export function fileContext(o: ContextOptions = {}): DeliveryContext {
     liquid: (template, context) => renderLiquid(template, data, context),
     contacts: { submitterEmail: null, taskSenderEmail: null, siteRecipients: [], siteManagers: [] },
     target: o.target ?? null,
+    earlierEvidence: o.earlier ?? [],
     link: '',
   };
 }

@@ -270,6 +270,7 @@ async function prepare(
     test: DeliveryContext['test'];
     fixedTemplates: Record<string, string> | null;
     target: Record<string, unknown> | null;
+    earlierEvidence: Record<string, unknown>[];
     signal: AbortSignal;
   },
 ): Promise<Prepared> {
@@ -426,6 +427,7 @@ async function prepare(
         ? await contactsFor(db, who)
         : { submitterEmail: null, taskSenderEmail: null, siteRecipients: [], siteManagers: [] },
     target: input.target,
+    earlierEvidence: input.earlierEvidence,
     link: model.submission.url,
   };
   return {
@@ -516,6 +518,15 @@ export async function runDelivery(
   let secrets: Record<string, string> = {};
   let prepared: Prepared | null = null;
   try {
+    // What this delivery's earlier attempts wrote, so an adapter can recognise its own files.
+    const earlier = await db
+      .selectFrom('delivery_attempts')
+      .select('evidence')
+      .where('delivery_id', '=', claimed.id)
+      .where('evidence', 'is not', null)
+      .orderBy('generation')
+      .orderBy('attempt_no')
+      .execute();
     prepared = await prepare(deps, {
       destinationId: dest.id,
       submissionId: claimed.submission_id,
@@ -529,6 +540,7 @@ export async function runDelivery(
       test: null,
       fixedTemplates: (claimed.template_version_ids as Record<string, string> | null) ?? null,
       target: (claimed.target as Record<string, unknown> | null) ?? null,
+      earlierEvidence: earlier.map((r) => r.evidence as Record<string, unknown>),
       signal: deadline,
     });
     secrets = prepared.secrets;
@@ -595,6 +607,8 @@ export async function runDelivery(
       template_version_ids: prepared ? JSON.stringify(prepared.templateVersionIds) : null,
       documents: prepared ? JSON.stringify(docSummary(prepared.files)) : null,
       target: prepared?.ctx.target ? JSON.stringify(prepared.ctx.target) : null,
+      // What a failed attempt had already written (an SFTP file), for the next one to replace.
+      evidence: err instanceof DeliveryError && err.evidence ? JSON.stringify(err.evidence) : null,
     };
     if (fail) {
       return finish(deps, claimed.id, token, {
@@ -779,6 +793,7 @@ export async function runTest(
         test: { tester: { email: tester.email, name: tester.display_name } },
         fixedTemplates: null,
         target: null,
+        earlierEvidence: [],
         signal,
       });
       secrets = prepared.secrets;

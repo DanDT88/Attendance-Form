@@ -123,6 +123,7 @@ function makeCtx(o: CtxOptions = {}): DeliveryContext {
       ...o.contacts,
     },
     target: null,
+    earlierEvidence: [],
     link: model.submission.url,
   };
 }
