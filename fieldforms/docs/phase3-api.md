@@ -115,16 +115,16 @@ gain `deliveryAlertEmails`, `brandName`, `brandColour`.
 
 ## Public API (`/api/v1`, `Authorization: Bearer ff_…`)
 
-| Route                                     | Scope              | Returns                                                                                                                |
-| ----------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/forms`                       | `forms:read`       | `[{ id, name, version, versionId, publishedAt }]`                                                                      |
-| `GET /api/v1/forms/:id/versions/:version` | `forms:read`       | `{ id, version, definition }`                                                                                          |
-| `GET /api/v1/submissions`                 | `submissions:read` | `?formId&since&until&siteId&cursor&limit(≤500)` → `{ data: [submission JSON], next }` ordered by received time then id |
-| `GET /api/v1/submissions/:id`             | `submissions:read` | the submission JSON (schema `fieldforms.submission/1`)                                                                 |
-| `GET /api/v1/submissions/:id/document`    | `submissions:read` | `?format=` → the file                                                                                                  |
-| `GET /api/v1/files/:id`                   | `files:read`       | a photo or signature of a submission the key can see                                                                   |
-| `GET /api/v1/attendance/daily`            | `attendance:read`  | `?from&to&siteId` → the daily report rows                                                                              |
-| `GET /api/v1/openapi.json`                | none               | the OpenAPI 3.1 document                                                                                               |
+| Route                                     | Scope              | Returns                                                                                                                                                                                                                          |
+| ----------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/forms`                       | `forms:read`       | `[{ id, name, version, versionId, publishedAt }]`                                                                                                                                                                                |
+| `GET /api/v1/forms/:id/versions/:version` | `forms:read`       | `{ id, version, definition }`                                                                                                                                                                                                    |
+| `GET /api/v1/submissions`                 | `submissions:read` | `?formId&since&until&siteId&cursor&limit(≤500)` → `{ data: [submission JSON], next, resume }` ordered by received time then id; `next` is null once caught up, so store `resume` for the next poll (the last 30 s are held back) |
+| `GET /api/v1/submissions/:id`             | `submissions:read` | the submission JSON (schema `fieldforms.submission/1`)                                                                                                                                                                           |
+| `GET /api/v1/submissions/:id/document`    | `submissions:read` | `?format=` → the file                                                                                                                                                                                                            |
+| `GET /api/v1/files/:id`                   | `files:read`       | a photo or signature of a submission the key can see                                                                                                                                                                             |
+| `GET /api/v1/attendance/daily`            | `attendance:read`  | `?from&to&siteId` → the daily report rows                                                                                                                                                                                        |
+| `GET /api/v1/openapi.json`                | none               | the OpenAPI 3.1 document                                                                                                                                                                                                         |
 
 Errors: `401 { error }` for a missing, malformed, unknown, revoked or expired key (or one whose
 creator is deactivated); `403` for a missing scope or a form/site outside the key; `429` over
